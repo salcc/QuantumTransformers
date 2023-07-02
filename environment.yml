@@ -1,0 +1,14 @@
+name: quantum-transformers
+dependencies:
+  - python=3.10
+  - pip
+  - pip:
+    - jupyterlab
+    - ipywidgets
+    - numpy
+    - matplotlib
+    - h5py
+    - torch
+    - torchvision
+    - torchtext
+    - pennylane
