@@ -7,7 +7,8 @@ dependencies:
     - ipywidgets
     - numpy
     - matplotlib
-    - h5py
+    - gdown
+    - scikit-learn
     - torch
     - torchvision
     - torchtext
