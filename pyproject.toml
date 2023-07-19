@@ -1,0 +1,37 @@
+[build-system]
+requires = ["setuptools"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "QuantumTransformers"
+version = "0.0.1"
+readme = "README.md"
+dependencies = [
+    "numpy",
+    "matplotlib",
+    "gdown",
+    "scikit-learn",
+    "torch",
+    "torchvision",
+    "torchtext",
+    "portalocker",
+    "pennylane"
+]
+
+[project.optional-dependencies]
+jupyter = [
+    "jupyterlab",
+    "ipywidgets"
+]
+
+mypy = [
+    "mypy"
+]
+
+[tool.setuptools]
+packages = ["quantum_transformers"]
+
+[tool.mypy]
+python_version = "3.11"
+ignore_missing_imports = true
+plugins = "numpy.typing.mypy_plugin"

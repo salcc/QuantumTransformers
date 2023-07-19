@@ -5,11 +5,13 @@ from sklearn.metrics import roc_auc_score
 import torch
 
 
-def train(model, train_dataloader, valid_dataloader, learning_rate, num_epochs, device, verbose=False):
+def train(model, train_dataloader, valid_dataloader, learning_rate, num_epochs, device, verbose=False) -> None:
+    """Trains the given model on the given dataloaders for the given parameters"""
     model.to(device)
     optimizer = torch.optim.Adam(model.parameters(), lr=learning_rate)
     criterion = torch.nn.CrossEntropyLoss()
 
+    best_val_auc, best_epoch = 0.0, 0
     start_time = time.time()
     for epoch in range(num_epochs):
         step = 0
@@ -74,7 +76,16 @@ def train(model, train_dataloader, valid_dataloader, learning_rate, num_epochs, 
         if y_score.shape[1] == 2:  # binary classification
             y_score = y_score[:, 1]
 
+        val_loss /= val_steps
+        val_acc = val_correct / len(valid_dataloader.dataset)*100
+        val_auc = roc_auc_score(y_true, y_score, multi_class='ovr') * 100
         print(f"Epoch {epoch+1}/{num_epochs} ({time.time()-start_time:.2f}s):",
-              f"Loss = {val_loss/val_steps:.4f},",
-              f"Accuracy = {val_correct/len(valid_dataloader.dataset)*100:.2f}%,",
-              f"AUC = {roc_auc_score(y_true, y_score, multi_class='ovr')*100:.2f}%")
+              f"Loss = {val_loss:.4f},",
+              f"Accuracy = {val_acc:.2f}%,",
+              f"AUC = {val_auc:.2f}%")
+        if val_auc > best_val_auc:
+            best_val_auc = val_auc
+            best_epoch = epoch + 1
+
+    print(f"BEST AUC = {best_val_auc:.2f}% AT EPOCH {best_epoch}")
+
