@@ -10,7 +10,7 @@ dependencies = [
     "numpy",
     "matplotlib",
     "gdown",
-    "scikit-learn",
+    "torchmetrics",
     "torch",
     "torchvision",
     "torchtext",
