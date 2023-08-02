@@ -1,7 +1,9 @@
 import time
 
 import torch
-import torchmetrics
+import torch.utils.data
+import torchmetrics.classification
+
 
 def train(model: torch.nn.Module, train_dataloader: torch.utils.data.DataLoader, valid_dataloader: torch.utils.data.DataLoader, num_classes: int,
           learning_rate: float, num_epochs: int, device: torch.device, verbose: bool = False) -> None:
@@ -23,8 +25,8 @@ def train(model: torch.nn.Module, train_dataloader: torch.utils.data.DataLoader,
         for inputs, labels in train_dataloader:
             inputs, labels = inputs.to(device), labels.long().to(device)
 
-            if verbose:
-                operation_start_time = time.time()
+
+            operation_start_time = time.time()
 
             optimizer.zero_grad()
 
@@ -83,4 +85,3 @@ def train(model: torch.nn.Module, train_dataloader: torch.utils.data.DataLoader,
             best_epoch = epoch + 1
 
     print(f"BEST AUC = {best_val_auc:.2f}% AT EPOCH {best_epoch}")
-

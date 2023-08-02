@@ -6,6 +6,7 @@ import torch
 
 
 def plot_image(image, abs_log=False):
+    """Plots an image with one subplot per channel"""
     num_channels = image.shape[2]
     fig, axs = plt.subplots(1, num_channels, figsize=(num_channels*3, 3))
     if num_channels == 1:
@@ -19,6 +20,7 @@ def plot_image(image, abs_log=False):
 
 
 def delete_variables(*variables):
+    """Deletes variables from memory, empties the GPU cache, and runs garbage collection"""
     for var in variables:
         del var
     torch.cuda.empty_cache()

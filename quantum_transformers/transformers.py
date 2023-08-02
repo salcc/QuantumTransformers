@@ -8,7 +8,7 @@ class QuantumLinear(nn.Module):  # note that input and output dimension are the 
         super().__init__()
 
         # print(f"Using {num_qlayers} quantum layers with {num_qubits} qubits on {qdevice}")
-        
+
         def _circuit(inputs, weights):
             qml.templates.AngleEmbedding(inputs, wires=range(num_qubits))
             qml.templates.BasicEntanglerLayers(weights, wires=range(num_qubits))
@@ -85,21 +85,20 @@ class QuantumMultiheadSelfAttention(BaseMultiheadSelfAttention):
         self.qkv_proj = QuantumLinear(embed_dim * 3)
         self.o_proj = QuantumLinear(embed_dim)
 
-    
 
 class BaseFeedForward(nn.Module):
     def __init__(self, hidden_size, mlp_hidden_size, dropout):
         super().__init__()
-        
+
         self.fc1 = nn.Linear(hidden_size, mlp_hidden_size)
         self.dropout = nn.Dropout(dropout)
         self.gelu = nn.GELU()
         self.fc2 = nn.Linear(mlp_hidden_size, hidden_size)
-        
 
     def forward(self, x):
         raise NotImplementedError
-    
+
+
 class ClassicalFeedForward(BaseFeedForward):
     def __init__(self, hidden_size, mlp_hidden_size, dropout):
         super().__init__(hidden_size, mlp_hidden_size, dropout)
@@ -110,6 +109,7 @@ class ClassicalFeedForward(BaseFeedForward):
         x = self.gelu(x)
         x = self.fc2(x)
         return x
+
 
 class QuantumFeedForward(BaseFeedForward):
     def __init__(self, hidden_size, mlp_hidden_size, dropout):
@@ -124,12 +124,12 @@ class QuantumFeedForward(BaseFeedForward):
         x = self.gelu(x)
         x = self.fc2(x)
         return x
-    
+
 
 class BaseTransformerBlock(nn.Module):
     def __init__(self, hidden_size, num_heads, mlp_hidden_size, dropout):
         super().__init__()
-        
+
         self.attn_norm = nn.LayerNorm(hidden_size)
         self.attn = None
         self.attn_dropout = nn.Dropout(dropout)
@@ -137,7 +137,6 @@ class BaseTransformerBlock(nn.Module):
         self.mlp_norm = nn.LayerNorm(hidden_size)
         self.mlp = None
         self.mlp_dropout = nn.Dropout(dropout)
-
 
     def forward(self, x):
         attn_output = self.attn_norm(x)
@@ -148,29 +147,29 @@ class BaseTransformerBlock(nn.Module):
         y = self.mlp_norm(x)
         y = self.mlp(y)
         y = self.mlp_dropout(y)
-        
+
         return x + y
 
 
 class ClassicalTransformerBlock(BaseTransformerBlock):
     def __init__(self, hidden_size, num_heads, mlp_hidden_size, dropout):
         super().__init__(hidden_size, num_heads, mlp_hidden_size, dropout)
-        
+
         self.attn = ClassicalMultiheadSelfAttention(hidden_size, num_heads, dropout)
         self.mlp = ClassicalFeedForward(hidden_size, mlp_hidden_size, dropout)
+
 
 class QuantumTransformerBlock(BaseTransformerBlock):
     def __init__(self, hidden_size, num_heads, mlp_hidden_size, dropout):
         super().__init__(hidden_size, num_heads, mlp_hidden_size, dropout)
-        
+
         self.attn = QuantumMultiheadSelfAttention(hidden_size, num_heads, dropout)
         self.mlp = QuantumFeedForward(hidden_size, mlp_hidden_size, dropout)
-        
 
 
 class BaseVisionTransformer(nn.Module):
     def __init__(self, img_size, num_channels, num_classes, patch_size, hidden_size, num_heads, num_transformer_blocks, mlp_hidden_size,
-                             dropout=0.1, channels_last=False):
+                 dropout=0.1, channels_last=False):
         super().__init__()
 
         self.channels_last = channels_last
@@ -193,7 +192,7 @@ class BaseVisionTransformer(nn.Module):
         self.dropout = nn.Dropout(dropout)
 
         self.transformer_blocks = None
-        
+
         self.layer_norm = nn.LayerNorm(hidden_size)
 
         self.linear = nn.Linear(hidden_size, num_classes)
@@ -206,10 +205,10 @@ class BaseVisionTransformer(nn.Module):
         x = self.patch_embedding(x)
         x = x.flatten(start_dim=2)
         x = x.transpose(1, 2)
-        
+
         # CLS token
         x = torch.cat((self.cls_token.expand(x.shape[0], -1, -1), x), dim=1)
-        
+
         # Positional embedding
         x = self.dropout(x + self.pos_embedding)
 
@@ -225,45 +224,48 @@ class BaseVisionTransformer(nn.Module):
 
         # Classification logits
         x = self.linear(x)
-        
+
         return x
-    
+
+
 class ClassicalVisionTransformer(BaseVisionTransformer):
     def __init__(self, img_size, num_channels, num_classes, patch_size, hidden_size, num_heads, num_transformer_blocks, mlp_hidden_size,
-                             dropout=0.1, channels_last=False):
+                 dropout=0.1, channels_last=False):
         super().__init__(img_size, num_channels, num_classes, patch_size, hidden_size, num_heads, num_transformer_blocks, mlp_hidden_size,
-                             dropout=dropout, channels_last=channels_last)
-        
+                         dropout=dropout, channels_last=channels_last)
+
         self.transformer_blocks = nn.ModuleList([ClassicalTransformerBlock(hidden_size, num_heads, mlp_hidden_size, dropout)
                                                  for _ in range(num_transformer_blocks)])
 
+
 class QuantumVisionTransformer(BaseVisionTransformer):
     def __init__(self, img_size, num_channels, num_classes, patch_size, hidden_size, num_heads, num_transformer_blocks, mlp_hidden_size,
-                             dropout=0.1, channels_last=False):
+                 dropout=0.1, channels_last=False):
         super().__init__(img_size, num_channels, num_classes, patch_size, hidden_size, num_heads, num_transformer_blocks, mlp_hidden_size,
-                             dropout=dropout, channels_last=channels_last)
-        
+                         dropout=dropout, channels_last=channels_last)
+
         self.transformer_blocks = nn.ModuleList([QuantumTransformerBlock(hidden_size, num_heads, mlp_hidden_size, dropout)
                                                  for _ in range(num_transformer_blocks)])
-        
+
+
 class BaseTransformer(nn.Module):
     def __init__(self, num_tokens, num_classes, num_transformer_blocks, hidden_size, num_heads, mlp_hidden_size, dropout=0.1):
         super().__init__()
-        
+
         self.token_embedding = nn.Embedding(num_tokens, hidden_size)
         self.pos_embedding = nn.Embedding(num_tokens, hidden_size)
         self.dropout = nn.Dropout(dropout)
-        
+
         self.transformer_blocks = None
-        
+
         self.layer_norm = nn.LayerNorm(hidden_size)
-        
+
         self.linear = nn.Linear(hidden_size, num_classes)
-        
+
     def forward(self, x):
         # Token embedding
         x = self.token_embedding(x)
-        
+
         # Positional embedding
         batch_size, seq_len, embed_dim = x.shape
         positions = torch.arange(seq_len, device=x.device).expand(batch_size, seq_len)
@@ -271,32 +273,34 @@ class BaseTransformer(nn.Module):
 
         # Dropout
         x = self.dropout(x)
-        
+
         # Transformer blocks
         for transformer_block in self.transformer_blocks:
             x = transformer_block(x)
-            
+
         # Layer normalization
         x = self.layer_norm(x)
-        
+
         # Global average pooling
         x = x.mean(dim=1)
 
         # Classification logits
         x = self.linear(x)
-        
+
         return x
-    
+
+
 class ClassicalTransformer(BaseTransformer):
     def __init__(self, num_tokens, num_classes, num_transformer_blocks, hidden_size, num_heads, mlp_hidden_size, dropout=0.1):
         super().__init__(num_tokens, num_classes, num_transformer_blocks, hidden_size, num_heads, mlp_hidden_size, dropout=0.1)
-        
+
         self.transformer_blocks = nn.ModuleList([ClassicalTransformerBlock(hidden_size, num_heads, mlp_hidden_size, dropout)
                                                  for _ in range(num_transformer_blocks)])
-        
+
+
 class QuantumTransformer(BaseTransformer):
     def __init__(self, num_tokens, num_classes, num_transformer_blocks, hidden_size, num_heads, mlp_hidden_size, dropout=0.1):
         super().__init__(num_tokens, num_classes, num_transformer_blocks, hidden_size, num_heads, mlp_hidden_size, dropout=0.1)
-        
+
         self.transformer_blocks = nn.ModuleList([QuantumTransformerBlock(hidden_size, num_heads, mlp_hidden_size, dropout)
                                                  for _ in range(num_transformer_blocks)])

@@ -13,8 +13,6 @@ dependencies = [
     "torchmetrics",
     "torch",
     "torchvision",
-    "torchtext",
-    "portalocker",
     "pennylane"
 ]
 
@@ -24,14 +22,17 @@ jupyter = [
     "ipywidgets"
 ]
 
-mypy = [
-    "mypy"
+nlp = [
+    "torchtext",
+    "portalocker"
+]
+
+medmnist = [
+    "medmnist"
 ]
 
 [tool.setuptools]
-packages = ["quantum_transformers"]
-
-[tool.mypy]
-python_version = "3.11"
-ignore_missing_imports = true
-plugins = "numpy.typing.mypy_plugin"
+packages = [
+    "quantum_transformers",
+    "quantum_transformers.datasets",
+]
