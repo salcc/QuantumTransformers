@@ -4107,13 +4107,13 @@ files = [
 
 [[package]]
 name = "tensorcircuit"
-version = "0.10.0"
+version = "0.11.0"
 description = "High performance unified quantum computing framework for the NISQ era"
 optional = false
 python-versions = "*"
 files = [
-    {file = "tensorcircuit-0.10.0-py3-none-any.whl", hash = "sha256:40d70cdc8adf4dc42486c419b695587428e788ffee881a1cd193ac4c41f7c1b7"},
-    {file = "tensorcircuit-0.10.0.tar.gz", hash = "sha256:8eeb055b021156441ab05a342fd1e0732f44ca2389e25e2568f149b83b54a9c4"},
+    {file = "tensorcircuit-0.11.0-py3-none-any.whl", hash = "sha256:9a0b71adf8e581112a86f64c49631d626abc19bf6d13524154deb1df26926c85"},
+    {file = "tensorcircuit-0.11.0.tar.gz", hash = "sha256:f60b61e801683f45d70ecc696d2f33962a7e7020b2f3aef3313654429acb568d"},
 ]
 
 [package.dependencies]
@@ -4976,4 +4976,4 @@ testing = ["big-O", "jaraco.functools", "jaraco.itertools", "more-itertools", "p
 [metadata]
 lock-version = "2.0"
 python-versions = ">=3.11,<3.12"
-content-hash = "017657883db27ac45255057bac24327e7729c35655892f58db28f907d160ded0"
+content-hash = "97e74586580d896dbaa82ffd18adeeaddce6e7f31ccc4f678bd8a9d44c76060e"
