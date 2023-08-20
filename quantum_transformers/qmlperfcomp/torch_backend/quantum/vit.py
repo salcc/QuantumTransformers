@@ -137,7 +137,9 @@ def VisionTransformer(img_size, num_channels, num_classes, patch_size, hidden_si
             # x.shape = (batch_size, num_channels, img_size, img_size)
             # Note that PyTorch's Conv2D expects the input to be in the format (batch_size, num_channels, height, width)
 
-            # Split image into patches
+            # Splitting an image into patches and linearly projecting these flattened patches can be
+            # simplified as a single convolution operation, where both the kernel size and the stride size
+            # are set to the patch size.
             x = self.patch_embedding(x)
             # x.shape = (batch_size, hidden_size, sqrt(num_patches), sqrt(num_patches))
             x = x.flatten(start_dim=2)

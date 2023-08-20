@@ -106,7 +106,9 @@ class VisionTransformer(nn.Module):
         num_patches = (img_size // self.patch_size) ** 2
         num_steps = num_patches + 1
 
-        # Split image into patches
+        # Splitting an image into patches and linearly projecting these flattened patches can be
+        # simplified as a single convolution operation, where both the kernel size and the stride size
+        # are set to the patch size.
         x = nn.Conv(
             features=self.hidden_size,
             kernel_size=(self.patch_size, self.patch_size),
