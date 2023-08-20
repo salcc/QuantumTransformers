@@ -29,13 +29,12 @@ class QuantumLayer(nn.Module):
     circuit: Callable
     num_qubits: int
     num_layers: int = 1
-    w_init: Callable = nn.initializers.xavier_normal()
 
     @nn.compact
     def __call__(self, x):
         shape = x.shape
         x = jnp.reshape(x, (-1, shape[-1]))
-        weights = self.param('w', self.w_init, (self.num_layers, self.num_qubits))
+        weights = self.param('w', nn.initializers.xavier_normal(), (self.num_layers, self.num_qubits))
         x = jax.vmap(self.circuit, in_axes=(0, None))(x, weights)
         x = jnp.concatenate(x, axis=-1)
         x = jnp.reshape(x, tuple(shape))
