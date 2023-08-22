@@ -1,3 +1,4 @@
+from typing import Literal
 import flax.linen as nn
 import jax.numpy as jnp
 
@@ -150,6 +151,7 @@ class VisionTransformer(nn.Module):
     mlp_hidden_size: int
     dropout: float = 0.1
     channels_last: bool = True
+    classifier: Literal['token', 'gap'] = 'gap'
 
     @nn.compact
     def __call__(self, x, train, quantum_attn_circuit=None, quantum_mlp_circuit=None):
@@ -163,8 +165,7 @@ class VisionTransformer(nn.Module):
         batch_size, height, width, num_channels = x.shape
         assert height == width, "Input must be square"
         img_size = height
-        num_patches = (img_size // self.patch_size) ** 2
-        num_steps = num_patches + 1
+        num_steps = (img_size // self.patch_size) ** 2
 
         # Splitting an image into patches and linearly projecting these flattened patches can be
         # simplified as a single convolution operation, where both the kernel size and the stride size
@@ -175,15 +176,17 @@ class VisionTransformer(nn.Module):
             strides=self.patch_size,
             padding="VALID"
         )(x)
-        # x.shape = (batch_size, sqrt(num_patches), sqrt(num_patches), hidden_size)
-        x = jnp.reshape(x, (batch_size, num_patches, self.hidden_size))
-        # x.shape = (batch_size, num_patches, hidden_size)
-
-        # CLS token
-        cls_token = self.param('cls', nn.initializers.zeros, (1, 1, self.hidden_size))
-        cls_token = jnp.tile(cls_token, (batch_size, 1, 1))
-        x = jnp.concatenate([cls_token, x], axis=1)
+        # x.shape = (batch_size, sqrt(num_steps), sqrt(num_steps), hidden_size)
+        x = jnp.reshape(x, (batch_size, num_steps, self.hidden_size))
         # x.shape = (batch_size, num_steps, hidden_size)
+
+        if self.classifier == 'token':
+            # CLS token
+            cls_token = self.param('cls', nn.initializers.zeros, (1, 1, self.hidden_size))
+            cls_token = jnp.tile(cls_token, (batch_size, 1, 1))
+            x = jnp.concatenate([cls_token, x], axis=1)
+            num_steps += 1
+            # x.shape = (batch_size, num_steps, hidden_size)
 
         # Positional embedding
         x += self.param('pos_embedding', nn.initializers.normal(stddev=0.02), (1, num_steps, self.hidden_size))
@@ -205,8 +208,12 @@ class VisionTransformer(nn.Module):
         x = nn.LayerNorm()(x)
         # x.shape = (batch_size, num_steps, hidden_size)
 
-        # Get the classifcation token
-        x = x[:, 0]
+        if self.classifier == 'token':
+            # Get the classifcation token
+            x = x[:, 0]
+        elif self.classifier == 'gap':
+            # Global average pooling
+            x = jnp.mean(x, axis=1)
         # x.shape = (batch_size, hidden_size)
 
         # Classification logits
