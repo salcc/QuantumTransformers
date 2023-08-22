@@ -1,8 +1,8 @@
-from typing import Literal
+from typing import Literal, Callable, Optional
 import flax.linen as nn
 import jax.numpy as jnp
 
-from quantum_transformers.quantum_layer import QuantumLayer, get_circuit
+from quantum_transformers.quantum_layer import QuantumLayer
 
 # See:
 # - https://nlp.seas.harvard.edu/annotated-transformer/
@@ -14,16 +14,17 @@ class MultiHeadSelfAttention(nn.Module):
     embed_dim: int
     num_heads: int
     dropout: float = 0.0
+    quantum_circuit: Optional[Callable] = None
 
     @nn.compact
-    def __call__(self, x, deterministic, quantum_attn_circuit=None):
+    def __call__(self, x, deterministic):
         batch_size, seq_len, embed_dim = x.shape
         # x.shape = (batch_size, seq_len, embed_dim)
         assert embed_dim == self.embed_dim, f"Input embedding dimension ({embed_dim}) should match layer embedding dimension ({self.embed_dim})"
         assert embed_dim % self.num_heads == 0, f"Input embedding dimension ({embed_dim}) should be divisible by number of heads ({self.num_heads})"
         head_dim = embed_dim // self.num_heads
 
-        if quantum_attn_circuit is None:
+        if self.quantum_circuit is None:
             q, k, v = [
                 proj(x).reshape(batch_size, seq_len, self.num_heads, head_dim).swapaxes(1, 2)
                 for proj, x in zip([nn.Dense(features=embed_dim),
@@ -33,9 +34,9 @@ class MultiHeadSelfAttention(nn.Module):
         else:
             q, k, v = [
                 proj(x).reshape(batch_size, seq_len, self.num_heads, head_dim).swapaxes(1, 2)
-                for proj, x in zip([QuantumLayer(num_qubits=embed_dim, circuit=quantum_attn_circuit),
-                                    QuantumLayer(num_qubits=embed_dim, circuit=quantum_attn_circuit),
-                                    QuantumLayer(num_qubits=embed_dim, circuit=quantum_attn_circuit)], [x, x, x])
+                for proj, x in zip([QuantumLayer(num_qubits=embed_dim, circuit=self.quantum_circuit),
+                                    QuantumLayer(num_qubits=embed_dim, circuit=self.quantum_circuit),
+                                    QuantumLayer(num_qubits=embed_dim, circuit=self.quantum_circuit)], [x, x, x])
             ]
 
         # Compute scaled dot-product attention
@@ -50,10 +51,10 @@ class MultiHeadSelfAttention(nn.Module):
         # values.shape = (batch_size, num_heads, seq_len, head_dim)
         values = values.swapaxes(1, 2).reshape(batch_size, seq_len, embed_dim)
         # values.shape = (batch_size, seq_len, embed_dim)
-        if quantum_attn_circuit is None:
+        if self.quantum_circuit is None:
             x = nn.Dense(features=embed_dim)(values)
         else:
-            x = QuantumLayer(num_qubits=embed_dim, circuit=quantum_attn_circuit)(values)
+            x = QuantumLayer(num_qubits=embed_dim, circuit=self.quantum_circuit)(values)
         # x.shape = (batch_size, seq_len, embed_dim)
 
         return x
@@ -63,12 +64,13 @@ class FeedForward(nn.Module):
     hidden_size: int
     mlp_hidden_size: int
     dropout: float = 0.0
+    quantum_circuit: Optional[Callable] = None
 
     @nn.compact
-    def __call__(self, x, deterministic, quantum_mlp_circuit=None):
+    def __call__(self, x, deterministic):
         x = nn.Dense(features=self.mlp_hidden_size)(x)
-        if quantum_mlp_circuit is not None:
-            x = QuantumLayer(num_qubits=self.mlp_hidden_size, circuit=quantum_mlp_circuit)(x)
+        if self.quantum_circuit is not None:
+            x = QuantumLayer(num_qubits=self.mlp_hidden_size, circuit=self.quantum_circuit)(x)
         x = nn.Dropout(rate=self.dropout)(x, deterministic=deterministic)
         x = nn.gelu(x)
         x = nn.Dense(features=self.hidden_size)(x)
@@ -80,18 +82,20 @@ class TransformerBlock(nn.Module):
     num_heads: int
     mlp_hidden_size: int
     dropout: float = 0.0
+    quantum_attn_circuit: Optional[Callable] = None
+    quantum_mlp_circuit: Optional[Callable] = None
 
     @nn.compact
-    def __call__(self, x, deterministic, quantum_attn_circuit=None, quantum_mlp_circuit=None):
+    def __call__(self, x, deterministic):
         attn_output = nn.LayerNorm()(x)
-        attn_output = MultiHeadSelfAttention(embed_dim=self.hidden_size, num_heads=self.num_heads, dropout=self.dropout)(
-            attn_output, deterministic=deterministic, quantum_attn_circuit=quantum_attn_circuit)
+        attn_output = MultiHeadSelfAttention(embed_dim=self.hidden_size, num_heads=self.num_heads, dropout=self.dropout,
+                                             quantum_circuit=self.quantum_attn_circuit)(attn_output, deterministic=deterministic)
         attn_output = nn.Dropout(rate=self.dropout)(attn_output, deterministic=deterministic)
         x = x + attn_output
 
         y = nn.LayerNorm()(x)
-        y = FeedForward(hidden_size=self.hidden_size, mlp_hidden_size=self.mlp_hidden_size)(
-            y, deterministic=deterministic, quantum_mlp_circuit=quantum_mlp_circuit)
+        y = FeedForward(hidden_size=self.hidden_size, mlp_hidden_size=self.mlp_hidden_size,
+                        quantum_circuit=self.quantum_mlp_circuit)(y, deterministic=deterministic)
         y = nn.Dropout(rate=self.dropout)(y, deterministic=deterministic)
 
         return x + y
@@ -106,9 +110,11 @@ class Transformer(nn.Module):
     num_transformer_blocks: int
     mlp_hidden_size: int
     dropout: float = 0.0
+    quantum_attn_circuit: Optional[Callable] = None
+    quantum_mlp_circuit: Optional[Callable] = None
 
     @nn.compact
-    def __call__(self, x, train, quantum_attn_circuit=None, quantum_mlp_circuit=None):
+    def __call__(self, x, train):
         # Token embedding
         x = nn.Embed(num_embeddings=self.num_tokens, features=self.hidden_size)(x)
         # x.shape = (batch_size, seq_len, hidden_size)
@@ -126,7 +132,9 @@ class Transformer(nn.Module):
                 num_heads=self.num_heads,
                 mlp_hidden_size=self.mlp_hidden_size,
                 dropout=self.dropout,
-            )(x, deterministic=not train, quantum_attn_circuit=quantum_attn_circuit, quantum_mlp_circuit=quantum_mlp_circuit)
+                quantum_attn_circuit=self.quantum_attn_circuit,
+                quantum_mlp_circuit=self.quantum_mlp_circuit
+            )(x, deterministic=not train)
 
         # Layer normalization
         x = nn.LayerNorm()(x)
@@ -152,9 +160,11 @@ class VisionTransformer(nn.Module):
     dropout: float = 0.1
     channels_last: bool = True
     classifier: Literal['token', 'gap'] = 'gap'
+    quantum_attn_circuit: Optional[Callable] = None
+    quantum_mlp_circuit: Optional[Callable] = None
 
     @nn.compact
-    def __call__(self, x, train, quantum_attn_circuit=None, quantum_mlp_circuit=None):
+    def __call__(self, x, train):
         assert x.ndim == 4, "Input must be a 4D tensor"
 
         if not self.channels_last:
@@ -202,7 +212,9 @@ class VisionTransformer(nn.Module):
                 num_heads=self.num_heads,
                 mlp_hidden_size=self.mlp_hidden_size,
                 dropout=self.dropout,
-            )(x, deterministic=not train, quantum_attn_circuit=quantum_attn_circuit, quantum_mlp_circuit=quantum_mlp_circuit)
+                quantum_attn_circuit=self.quantum_attn_circuit,
+                quantum_mlp_circuit=self.quantum_mlp_circuit
+            )(x, deterministic=not train)
 
         # Layer normalization
         x = nn.LayerNorm()(x)

@@ -15,7 +15,7 @@ class TrainState(flax.training.train_state.TrainState):
 
 
 @jax.jit
-def train_step(state: TrainState, batch, dropout_key, **model_kwargs):
+def train_step(state: TrainState, batch, dropout_key):
     dropout_train_key = jax.random.fold_in(key=dropout_key, data=state.step)
 
     def loss_fn(params):
@@ -23,7 +23,6 @@ def train_step(state: TrainState, batch, dropout_key, **model_kwargs):
             {'params': params},
             x=batch['input'],
             train=True,
-            **model_kwargs,
             rngs={'dropout': dropout_train_key}
         )
         if logits.shape[1] <= 2:
@@ -43,12 +42,11 @@ def train_step(state: TrainState, batch, dropout_key, **model_kwargs):
 
 
 @jax.jit
-def eval_step(state: TrainState, batch, **model_kwargs):
+def eval_step(state: TrainState, batch):
     logits = state.apply_fn(
         {'params': state.params},
         x=batch['input'],
         train=False,
-        **model_kwargs,
         rngs={'dropout': state.key}
     )
     if logits.shape[1] <= 2:
@@ -62,8 +60,7 @@ def eval_step(state: TrainState, batch, **model_kwargs):
 
 
 def train_and_evaluate(model: flax.linen.Module, train_dataloader, val_dataloader, num_classes: int,
-                       num_epochs: int, learning_rate: float = 1e-3, seed: int = 42, verbose: bool = False,
-                       **model_kwargs) -> None:
+                       num_epochs: int, learning_rate: float = 1e-3, seed: int = 42, verbose: bool = False) -> None:
     """Trains the given model on the given dataloaders for the given parameters"""
     root_key = jax.random.PRNGKey(seed=seed)
     root_key, params_key, dropout_key = jax.random.split(key=root_key, num=3)
@@ -74,7 +71,7 @@ def train_and_evaluate(model: flax.linen.Module, train_dataloader, val_dataloade
     batch_size = len(dummy_batch)
     x = jnp.zeros(shape=(batch_size,) + tuple(input_shape), dtype=input_dtype)  # Dummy input
 
-    variables = model.init(params_key, x, train=False, **model_kwargs)
+    variables = model.init(params_key, x, train=False)
 
     if verbose:
         print(jax.tree_map(lambda x: x.shape, variables))
@@ -95,7 +92,7 @@ def train_and_evaluate(model: flax.linen.Module, train_dataloader, val_dataloade
             for x, y in train_dataloader:
                 step_start_time = time.time()
                 batch = {'input': x, 'label': y}
-                state = train_step(state, batch, dropout_key, **model_kwargs)
+                state = train_step(state, batch, dropout_key)
                 progress_bar.update(1)
                 if verbose:
                     print(f" Step {state.step+1}/{len(train_dataloader)}: {time.time()-step_start_time:.2f}s")
@@ -104,7 +101,7 @@ def train_and_evaluate(model: flax.linen.Module, train_dataloader, val_dataloade
             val_loss = 0.0
             for x, y in val_dataloader:
                 batch = {'input': x, 'label': y}
-                results = eval_step(state, batch, **model_kwargs)
+                results = eval_step(state, batch)
                 logits.append(results['logits'])
                 labels.append(results['labels'])
                 val_loss += results['loss']
