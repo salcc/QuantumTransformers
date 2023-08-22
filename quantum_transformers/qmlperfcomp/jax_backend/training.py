@@ -63,7 +63,7 @@ def train_and_evaluate(model: flax.linen.Module, train_dataloader, val_dataloade
                        num_epochs: int, learning_rate: float = 1e-3, seed: int = 42, verbose: bool = False) -> None:
     """Trains the given model on the given dataloaders for the given parameters"""
     root_key = jax.random.PRNGKey(seed=seed)
-    main_key, params_key, dropout_key = jax.random.split(key=root_key, num=3)
+    root_key, params_key, dropout_key = jax.random.split(key=root_key, num=3)
 
     dummy_batch = next(iter(train_dataloader))[0]
     input_shape = dummy_batch[0].shape
@@ -98,7 +98,7 @@ def train_and_evaluate(model: flax.linen.Module, train_dataloader, val_dataloade
                     print(f" Step {state.step+1}/{len(train_dataloader)}: {time.time()-step_start_time:.2f}s")
 
             logits, labels = [], []
-            val_loss = 0
+            val_loss = 0.0
             for x, y in val_dataloader:
                 batch = {'input': x, 'label': y}
                 results = eval_step(state, batch)
