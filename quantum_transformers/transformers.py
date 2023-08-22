@@ -32,9 +32,9 @@ class MultiHeadSelfAttention(nn.Module):
         else:
             q, k, v = [
                 proj(x).reshape(batch_size, seq_len, self.num_heads, head_dim).swapaxes(1, 2)
-                for proj, x in zip([QuantumLayer(num_qubits=embed_dim, circuit=attn_circuit),
-                                    QuantumLayer(num_qubits=embed_dim, circuit=attn_circuit),
-                                    QuantumLayer(num_qubits=embed_dim, circuit=attn_circuit)], [x, x, x])
+                for proj, x in zip([QuantumLayer(num_qubits=embed_dim, circuit=quantum_attn_circuit),
+                                    QuantumLayer(num_qubits=embed_dim, circuit=quantum_attn_circuit),
+                                    QuantumLayer(num_qubits=embed_dim, circuit=quantum_attn_circuit)], [x, x, x])
             ]
 
         # Compute scaled dot-product attention
@@ -52,7 +52,7 @@ class MultiHeadSelfAttention(nn.Module):
         if quantum_attn_circuit is None:
             x = nn.Dense(features=embed_dim)(values)
         else:
-            x = QuantumLayer(num_qubits=embed_dim, circuit=attn_circuit)(values)
+            x = QuantumLayer(num_qubits=embed_dim, circuit=quantum_attn_circuit)(values)
         # x.shape = (batch_size, seq_len, embed_dim)
 
         return x
@@ -67,7 +67,7 @@ class FeedForward(nn.Module):
     def __call__(self, x, deterministic, quantum_mlp_circuit=None):
         x = nn.Dense(features=self.mlp_hidden_size)(x)
         if quantum_mlp_circuit is not None:
-            x = QuantumLayer(num_qubits=self.mlp_hidden_size, circuit=mlp_circuit)(x)
+            x = QuantumLayer(num_qubits=self.mlp_hidden_size, circuit=quantum_mlp_circuit)(x)
         x = nn.Dropout(rate=self.dropout)(x, deterministic=deterministic)
         x = nn.gelu(x)
         x = nn.Dense(features=self.hidden_size)(x)
