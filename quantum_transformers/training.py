@@ -101,7 +101,7 @@ def train_and_evaluate(model: flax.linen.Module, train_dataloader, val_dataloade
                     print(f" Step {state.step+1}/{len(train_dataloader)}: {time.time()-step_start_time:.2f}s")
 
             logits, labels = [], []
-            val_loss = 0
+            val_loss = 0.0
             for x, y in val_dataloader:
                 batch = {'input': x, 'label': y}
                 results = eval_step(state, batch, **model_kwargs)
