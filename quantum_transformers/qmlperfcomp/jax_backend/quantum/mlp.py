@@ -5,7 +5,7 @@ def MLP(hidden_size: int, qml_backend="pennylane", qdevice="default.qubit", qdif
     if qml_backend == "pennylane":
         from quantum_transformers.qmlperfcomp.jax_backend.quantum.pennylane_backend import QuantumLayer, get_circuit
     elif qml_backend == "tensorcircuit":
-        from quantum_transformers.tc_quantum_layer import QuantumLayer, get_circuit
+        from quantum_transformers.quantum_layer import QuantumLayer, get_circuit
     else:
         raise ValueError(f"Unknown qml_backend: {qml_backend}")
 

@@ -2,7 +2,7 @@ from typing import Literal
 import flax.linen as nn
 import jax.numpy as jnp
 
-from quantum_transformers.tc_quantum_layer import QuantumLayer, get_circuit
+from quantum_transformers.quantum_layer import QuantumLayer, get_circuit
 
 # See:
 # - https://nlp.seas.harvard.edu/annotated-transformer/
