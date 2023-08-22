@@ -26,12 +26,10 @@ ipywidgets = "^8.1.0"
 tqdm = "^4.65.0"
 numpy = "~1.23"
 gdown = "^4.7.1"
-torchtext = "0.15.1"
-portalocker = "^2.7.0"
 medmnist = "^2.2.2"
-torchmetrics = "^1.0.3"
 qiskit = "^0.44.0"
 pylatexenc = "^2.10"
+tensorflow-text = "2.14.0rc0"
 
 
 [[tool.poetry.source]]

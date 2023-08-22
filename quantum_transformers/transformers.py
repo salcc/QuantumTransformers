@@ -1,306 +1,216 @@
-import torch
-from torch import nn
-import pennylane as qml
+import flax.linen as nn
+import jax.numpy as jnp
+
+from quantum_transformers.tc_quantum_layer import QuantumLayer, get_circuit
+
+# See:
+# - https://nlp.seas.harvard.edu/annotated-transformer/
+# - https://github.com/rdisipio/qtransformer/blob/main/qtransformer.py
+# - https://github.com/google-research/vision_transformer/blob/main/vit_jax/models_vit.py
 
 
-class QuantumLinear(nn.Module):  # note that input and output dimension are the same (num_qubits)
-    def __init__(self, num_qubits, num_qlayers=1, qdevice="default.qubit"):
-        super().__init__()
+class MultiHeadSelfAttention(nn.Module):
+    embed_dim: int
+    num_heads: int
+    dropout: float = 0.0
 
-        # print(f"Using {num_qlayers} quantum layers with {num_qubits} qubits on {qdevice}")
-
-        def _circuit(inputs, weights):
-            qml.templates.AngleEmbedding(inputs, wires=range(num_qubits))
-            qml.templates.BasicEntanglerLayers(weights, wires=range(num_qubits))
-            return [qml.expval(qml.PauliZ(wires=i)) for i in range(num_qubits)]
-
-        dev = qml.device(qdevice, wires=num_qubits)
-        qlayer = qml.QNode(_circuit, dev, interface="torch")
-        self.linear = qml.qnn.TorchLayer(qlayer, {"weights": (num_qlayers, num_qubits)})
-
-    def forward(self, inputs):
-        return self.linear(inputs)
-
-
-class BaseMultiheadSelfAttention(nn.Module):
-    def __init__(self, embed_dim, num_heads, dropout=0.0):
-        super().__init__()
-        assert embed_dim % num_heads == 0, f"Embedding dimension ({embed_dim}) should be divisible by number of heads ({num_heads})"
-
-        self.embed_dim = embed_dim
-        self.num_heads = num_heads
-        self.head_dim = embed_dim // num_heads
-
-        self.qkv_proj = None
-        self.dropout = nn.Dropout(dropout)
-        self.o_proj = None
-
-    def forward(self, x):
+    @nn.compact
+    def __call__(self, x, deterministic, quantum_attn_circuit=None):
         batch_size, seq_len, embed_dim = x.shape
         # x.shape = (batch_size, seq_len, embed_dim)
         assert embed_dim == self.embed_dim, f"Input embedding dimension ({embed_dim}) should match layer embedding dimension ({self.embed_dim})"
+        assert embed_dim % self.num_heads == 0, f"Input embedding dimension ({embed_dim}) should be divisible by number of heads ({self.num_heads})"
+        head_dim = embed_dim // self.num_heads
 
-        # Compute Q, K, V matrices
-        qkv = self.qkv_proj(x)
-        # qkv.shape = (batch_size, seq_len, embed_dim * 3)
-        qkv = qkv.reshape(batch_size, seq_len, self.num_heads, 3 * self.head_dim)
-        # qkv.shape = (batch_size, seq_len, num_heads, 3 * head_dim)
-        qkv = qkv.permute(0, 2, 1, 3)
-        # qkv.shape = (batch_size, num_heads, seq_len, 3 * head_dim)
-        q, k, v = qkv.chunk(3, dim=-1)
-        # q.shape = k.shape = v.shape = (batch_size, num_heads, seq_len, head_dim)
+        if quantum_attn_circuit is None:
+            q, k, v = [
+                proj(x).reshape(batch_size, seq_len, self.num_heads, head_dim).swapaxes(1, 2)
+                for proj, x in zip([nn.Dense(features=embed_dim),
+                                    nn.Dense(features=embed_dim),
+                                    nn.Dense(features=embed_dim)], [x, x, x])
+            ]
+        else:
+            q, k, v = [
+                proj(x).reshape(batch_size, seq_len, self.num_heads, head_dim).swapaxes(1, 2)
+                for proj, x in zip([QuantumLayer(num_qubits=embed_dim, circuit=attn_circuit),
+                                    QuantumLayer(num_qubits=embed_dim, circuit=attn_circuit),
+                                    QuantumLayer(num_qubits=embed_dim, circuit=attn_circuit)], [x, x, x])
+            ]
 
         # Compute scaled dot-product attention
-        attn_logits = (q @ k.transpose(-2, -1)) / (self.head_dim ** 0.5)
+        attn_logits = (q @ k.swapaxes(-2, -1)) / jnp.sqrt(head_dim)
         # attn_logits.shape = (batch_size, num_heads, seq_len, seq_len)
-        attn = attn_logits.softmax(dim=-1)
+        attn = nn.softmax(attn_logits, axis=-1)
         # attn.shape = (batch_size, num_heads, seq_len, seq_len)
-        attn = self.dropout(attn)
+        attn = nn.Dropout(rate=self.dropout)(attn, deterministic=deterministic)
 
         # Compute output
         values = attn @ v
         # values.shape = (batch_size, num_heads, seq_len, head_dim)
-        values = values.permute(0, 2, 1, 3)
-        # values.shape = (batch_size, seq_len, num_heads, head_dim)
-        values = values.reshape(batch_size, seq_len, embed_dim)
+        values = values.swapaxes(1, 2).reshape(batch_size, seq_len, embed_dim)
         # values.shape = (batch_size, seq_len, embed_dim)
-        values = self.o_proj(values)
-        # values.shape = (batch_size, seq_len, embed_dim)
+        if quantum_attn_circuit is None:
+            x = nn.Dense(features=embed_dim)(values)
+        else:
+            x = QuantumLayer(num_qubits=embed_dim, circuit=attn_circuit)(values)
+        # x.shape = (batch_size, seq_len, embed_dim)
 
-        return values
-
-
-class ClassicalMultiheadSelfAttention(BaseMultiheadSelfAttention):
-    def __init__(self, embed_dim, num_heads, dropout=0.0):
-        super().__init__(embed_dim, num_heads, dropout)
-
-        self.qkv_proj = nn.Linear(embed_dim, embed_dim * 3)
-        self.o_proj = nn.Linear(embed_dim, embed_dim)
-
-
-class QuantumMultiheadSelfAttention(BaseMultiheadSelfAttention):
-    def __init__(self, embed_dim, num_heads, dropout=0.0):
-        super().__init__(embed_dim, num_heads, dropout)
-
-        self.qkv_proj = QuantumLinear(embed_dim * 3)
-        self.o_proj = QuantumLinear(embed_dim)
-
-
-class BaseFeedForward(nn.Module):
-    def __init__(self, hidden_size, mlp_hidden_size, dropout):
-        super().__init__()
-
-        self.fc1 = nn.Linear(hidden_size, mlp_hidden_size)
-        self.dropout = nn.Dropout(dropout)
-        self.gelu = nn.GELU()
-        self.fc2 = nn.Linear(mlp_hidden_size, hidden_size)
-
-    def forward(self, x):
-        raise NotImplementedError
-
-
-class ClassicalFeedForward(BaseFeedForward):
-    def __init__(self, hidden_size, mlp_hidden_size, dropout):
-        super().__init__(hidden_size, mlp_hidden_size, dropout)
-
-    def forward(self, x):
-        x = self.fc1(x)
-        x = self.dropout(x)
-        x = self.gelu(x)
-        x = self.fc2(x)
         return x
 
 
-class QuantumFeedForward(BaseFeedForward):
-    def __init__(self, hidden_size, mlp_hidden_size, dropout):
-        super().__init__(hidden_size, mlp_hidden_size, dropout)
+class FeedForward(nn.Module):
+    hidden_size: int
+    mlp_hidden_size: int
+    dropout: float = 0.0
 
-        self.vqc = QuantumLinear(mlp_hidden_size)
-
-    def forward(self, x):
-        x = self.fc1(x)
-        x = self.vqc(x)
-        x = self.dropout(x)
-        x = self.gelu(x)
-        x = self.fc2(x)
+    @nn.compact
+    def __call__(self, x, deterministic, quantum_mlp_circuit=None):
+        x = nn.Dense(features=self.mlp_hidden_size)(x)
+        if quantum_mlp_circuit is not None:
+            x = QuantumLayer(num_qubits=self.mlp_hidden_size, circuit=mlp_circuit)(x)
+        x = nn.Dropout(rate=self.dropout)(x, deterministic=deterministic)
+        x = nn.gelu(x)
+        x = nn.Dense(features=self.hidden_size)(x)
         return x
 
 
-class BaseTransformerBlock(nn.Module):
-    def __init__(self, hidden_size, num_heads, mlp_hidden_size, dropout):
-        super().__init__()
+class TransformerBlock(nn.Module):
+    hidden_size: int
+    num_heads: int
+    mlp_hidden_size: int
+    dropout: float = 0.0
 
-        self.attn_norm = nn.LayerNorm(hidden_size)
-        self.attn = None
-        self.attn_dropout = nn.Dropout(dropout)
-
-        self.mlp_norm = nn.LayerNorm(hidden_size)
-        self.mlp = None
-        self.mlp_dropout = nn.Dropout(dropout)
-
-    def forward(self, x):
-        attn_output = self.attn_norm(x)
-        attn_output = self.attn(attn_output)
-        attn_output = self.attn_dropout(attn_output)
+    @nn.compact
+    def __call__(self, x, deterministic, quantum_attn_circuit=None, quantum_mlp_circuit=None):
+        attn_output = nn.LayerNorm()(x)
+        attn_output = MultiHeadSelfAttention(embed_dim=self.hidden_size, num_heads=self.num_heads, dropout=self.dropout)(
+            attn_output, deterministic=deterministic, quantum_attn_circuit=quantum_attn_circuit)
+        attn_output = nn.Dropout(rate=self.dropout)(attn_output, deterministic=deterministic)
         x = x + attn_output
 
-        y = self.mlp_norm(x)
-        y = self.mlp(y)
-        y = self.mlp_dropout(y)
+        y = nn.LayerNorm()(x)
+        y = FeedForward(hidden_size=self.hidden_size, mlp_hidden_size=self.mlp_hidden_size)(
+            y, deterministic=deterministic, quantum_mlp_circuit=quantum_mlp_circuit)
+        y = nn.Dropout(rate=self.dropout)(y, deterministic=deterministic)
 
         return x + y
 
 
-class ClassicalTransformerBlock(BaseTransformerBlock):
-    def __init__(self, hidden_size, num_heads, mlp_hidden_size, dropout):
-        super().__init__(hidden_size, num_heads, mlp_hidden_size, dropout)
+class Transformer(nn.Module):
+    num_tokens: int
+    max_seq_len: int
+    num_classes: int
+    hidden_size: int
+    num_heads: int
+    num_transformer_blocks: int
+    mlp_hidden_size: int
+    dropout: float = 0.0
 
-        self.attn = ClassicalMultiheadSelfAttention(hidden_size, num_heads, dropout)
-        self.mlp = ClassicalFeedForward(hidden_size, mlp_hidden_size, dropout)
+    @nn.compact
+    def __call__(self, x, train, quantum_attn_circuit=None, quantum_mlp_circuit=None):
+        # Token embedding
+        x = nn.Embed(num_embeddings=self.num_tokens, features=self.hidden_size)(x)
+        # x.shape = (batch_size, seq_len, hidden_size)
+
+        # Positional embedding
+        x += nn.Embed(num_embeddings=self.max_seq_len, features=self.hidden_size)(jnp.arange(x.shape[1]))
+
+        # Dropout
+        x = nn.Dropout(rate=self.dropout)(x, deterministic=not train)
+
+        # Transformer blocks
+        for _ in range(self.num_transformer_blocks):
+            x = TransformerBlock(
+                hidden_size=self.hidden_size,
+                num_heads=self.num_heads,
+                mlp_hidden_size=self.mlp_hidden_size,
+                dropout=self.dropout,
+            )(x, deterministic=not train, quantum_attn_circuit=quantum_attn_circuit, quantum_mlp_circuit=quantum_mlp_circuit)
+
+        # Layer normalization
+        x = nn.LayerNorm()(x)
+
+        # Global average pooling
+        x = jnp.mean(x, axis=1)
+        # x.shape = (batch_size, hidden_size)
+
+        # Classification logits
+        x = nn.Dense(self.num_classes)(x)
+        # x.shape = (batch_size, num_classes)
+
+        return x
 
 
-class QuantumTransformerBlock(BaseTransformerBlock):
-    def __init__(self, hidden_size, num_heads, mlp_hidden_size, dropout):
-        super().__init__(hidden_size, num_heads, mlp_hidden_size, dropout)
+class VisionTransformer(nn.Module):
+    num_classes: int
+    patch_size: int
+    hidden_size: int
+    num_heads: int
+    num_transformer_blocks: int
+    mlp_hidden_size: int
+    dropout: float = 0.1
+    channels_last: bool = True
 
-        self.attn = QuantumMultiheadSelfAttention(hidden_size, num_heads, dropout)
-        self.mlp = QuantumFeedForward(hidden_size, mlp_hidden_size, dropout)
+    @nn.compact
+    def __call__(self, x, train, quantum_attn_circuit=None, quantum_mlp_circuit=None):
+        assert x.ndim == 4, "Input must be a 4D tensor"
 
+        if not self.channels_last:
+            x = x.transpose((0, 3, 1, 2))
+        # x.shape = (batch_size, height, width, num_channels)
+        # Note that JAX's Conv expects the input to be in the format (batch_size, height, width, num_channels)
 
-class BaseVisionTransformer(nn.Module):
-    def __init__(self, img_size, num_channels, num_classes, patch_size, hidden_size, num_heads, num_transformer_blocks, mlp_hidden_size,
-                 dropout=0.1, channels_last=False):
-        super().__init__()
-
-        self.channels_last = channels_last
+        batch_size, height, width, num_channels = x.shape
+        assert height == width, "Input must be square"
+        img_size = height
+        num_patches = (img_size // self.patch_size) ** 2
+        num_steps = num_patches + 1
 
         # Splitting an image into patches and linearly projecting these flattened patches can be
         # simplified as a single convolution operation, where both the kernel size and the stride size
         # are set to the patch size.
-        self.patch_embedding = nn.Conv2d(
-            in_channels=num_channels,
-            out_channels=hidden_size,
-            kernel_size=patch_size,
-            stride=patch_size
-        )
-        num_patches = (img_size // patch_size)**2
-
-        self.cls_token = nn.Parameter(torch.zeros(1, 1, hidden_size))
-        num_steps = 1 + num_patches
-
-        self.pos_embedding = nn.Parameter(torch.randn(1, num_steps, hidden_size) * 0.02)
-        self.dropout = nn.Dropout(dropout)
-
-        self.transformer_blocks = None
-
-        self.layer_norm = nn.LayerNorm(hidden_size)
-
-        self.linear = nn.Linear(hidden_size, num_classes)
-
-    def forward(self, x):
-        if self.channels_last:
-            x = x.permute(0, 3, 1, 2)
-
-        # Split image into patches
-        x = self.patch_embedding(x)
-        x = x.flatten(start_dim=2)
-        x = x.transpose(1, 2)
+        x = nn.Conv(
+            features=self.hidden_size,
+            kernel_size=(self.patch_size, self.patch_size),
+            strides=self.patch_size,
+            padding="VALID"
+        )(x)
+        # x.shape = (batch_size, sqrt(num_patches), sqrt(num_patches), hidden_size)
+        x = jnp.reshape(x, (batch_size, num_patches, self.hidden_size))
+        # x.shape = (batch_size, num_patches, hidden_size)
 
         # CLS token
-        x = torch.cat((self.cls_token.expand(x.shape[0], -1, -1), x), dim=1)
+        cls_token = self.param('cls', nn.initializers.zeros, (1, 1, self.hidden_size))
+        cls_token = jnp.tile(cls_token, (batch_size, 1, 1))
+        x = jnp.concatenate([cls_token, x], axis=1)
+        # x.shape = (batch_size, num_steps, hidden_size)
 
         # Positional embedding
-        x = self.dropout(x + self.pos_embedding)
-
-        # Transformer blocks
-        for transformer_block in self.transformer_blocks:
-            x = transformer_block(x)
-
-        # Layer normalization
-        x = self.layer_norm(x)
-
-        # Get the classification token
-        x = x[:, 0]
-
-        # Classification logits
-        x = self.linear(x)
-
-        return x
-
-
-class ClassicalVisionTransformer(BaseVisionTransformer):
-    def __init__(self, img_size, num_channels, num_classes, patch_size, hidden_size, num_heads, num_transformer_blocks, mlp_hidden_size,
-                 dropout=0.1, channels_last=False):
-        super().__init__(img_size, num_channels, num_classes, patch_size, hidden_size, num_heads, num_transformer_blocks, mlp_hidden_size,
-                         dropout=dropout, channels_last=channels_last)
-
-        self.transformer_blocks = nn.ModuleList([ClassicalTransformerBlock(hidden_size, num_heads, mlp_hidden_size, dropout)
-                                                 for _ in range(num_transformer_blocks)])
-
-
-class QuantumVisionTransformer(BaseVisionTransformer):
-    def __init__(self, img_size, num_channels, num_classes, patch_size, hidden_size, num_heads, num_transformer_blocks, mlp_hidden_size,
-                 dropout=0.1, channels_last=False):
-        super().__init__(img_size, num_channels, num_classes, patch_size, hidden_size, num_heads, num_transformer_blocks, mlp_hidden_size,
-                         dropout=dropout, channels_last=channels_last)
-
-        self.transformer_blocks = nn.ModuleList([QuantumTransformerBlock(hidden_size, num_heads, mlp_hidden_size, dropout)
-                                                 for _ in range(num_transformer_blocks)])
-
-
-class BaseTransformer(nn.Module):
-    def __init__(self, num_tokens, num_classes, num_transformer_blocks, hidden_size, num_heads, mlp_hidden_size, dropout=0.1):
-        super().__init__()
-
-        self.token_embedding = nn.Embedding(num_tokens, hidden_size)
-        self.pos_embedding = nn.Embedding(num_tokens, hidden_size)
-        self.dropout = nn.Dropout(dropout)
-
-        self.transformer_blocks = None
-
-        self.layer_norm = nn.LayerNorm(hidden_size)
-
-        self.linear = nn.Linear(hidden_size, num_classes)
-
-    def forward(self, x):
-        # Token embedding
-        x = self.token_embedding(x)
-
-        # Positional embedding
-        batch_size, seq_len, embed_dim = x.shape
-        positions = torch.arange(seq_len, device=x.device).expand(batch_size, seq_len)
-        x = x + self.pos_embedding(positions)
+        x += self.param('pos_embedding', nn.initializers.normal(stddev=0.02), (1, num_steps, self.hidden_size))
 
         # Dropout
-        x = self.dropout(x)
+        x = nn.Dropout(rate=self.dropout)(x, deterministic=not train)
+        # x.shape = (batch_size, num_steps, hidden_size)
 
         # Transformer blocks
-        for transformer_block in self.transformer_blocks:
-            x = transformer_block(x)
+        for _ in range(self.num_transformer_blocks):
+            x = TransformerBlock(
+                hidden_size=self.hidden_size,
+                num_heads=self.num_heads,
+                mlp_hidden_size=self.mlp_hidden_size,
+                dropout=self.dropout,
+            )(x, deterministic=not train, quantum_attn_circuit=quantum_attn_circuit, quantum_mlp_circuit=quantum_mlp_circuit)
 
         # Layer normalization
-        x = self.layer_norm(x)
+        x = nn.LayerNorm()(x)
+        # x.shape = (batch_size, num_steps, hidden_size)
 
-        # Global average pooling
-        x = x.mean(dim=1)
+        # Get the classifcation token
+        x = x[:, 0]
+        # x.shape = (batch_size, hidden_size)
 
         # Classification logits
-        x = self.linear(x)
+        x = nn.Dense(features=self.num_classes)(x)
+        # x.shape = (batch_size, num_classes)
 
         return x
-
-
-class ClassicalTransformer(BaseTransformer):
-    def __init__(self, num_tokens, num_classes, num_transformer_blocks, hidden_size, num_heads, mlp_hidden_size, dropout=0.1):
-        super().__init__(num_tokens, num_classes, num_transformer_blocks, hidden_size, num_heads, mlp_hidden_size, dropout=0.1)
-
-        self.transformer_blocks = nn.ModuleList([ClassicalTransformerBlock(hidden_size, num_heads, mlp_hidden_size, dropout)
-                                                 for _ in range(num_transformer_blocks)])
-
-
-class QuantumTransformer(BaseTransformer):
-    def __init__(self, num_tokens, num_classes, num_transformer_blocks, hidden_size, num_heads, mlp_hidden_size, dropout=0.1):
-        super().__init__(num_tokens, num_classes, num_transformer_blocks, hidden_size, num_heads, mlp_hidden_size, dropout=0.1)
-
-        self.transformer_blocks = nn.ModuleList([QuantumTransformerBlock(hidden_size, num_heads, mlp_hidden_size, dropout)
-                                                 for _ in range(num_transformer_blocks)])

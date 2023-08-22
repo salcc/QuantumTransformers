@@ -29,7 +29,7 @@ def train_step(state: TrainState, batch, dropout_key):
             if logits.shape[1] == 2:
                 logits = logits[:, 1]
             loss = optax.sigmoid_binary_cross_entropy(logits=logits, labels=batch['label']).mean()
-        else:    
+        else:
             loss = optax.softmax_cross_entropy_with_integer_labels(logits=logits, labels=batch['label']).mean()
         # return loss, logits
         return loss
@@ -67,8 +67,9 @@ def train_and_evaluate(model: flax.linen.Module, train_dataloader, val_dataloade
 
     dummy_batch = next(iter(train_dataloader))[0]
     input_shape = dummy_batch[0].shape
+    input_dtype = dummy_batch[0].dtype
     batch_size = len(dummy_batch)
-    x = jax.random.uniform(key=main_key, shape=(batch_size,) + tuple(input_shape))  # Dummy input
+    x = jnp.zeros(shape=(batch_size,) + tuple(input_shape), dtype=input_dtype)  # Dummy input
 
     variables = model.init(params_key, x, train=False)
 
@@ -87,7 +88,7 @@ def train_and_evaluate(model: flax.linen.Module, train_dataloader, val_dataloade
     best_val_auc, best_epoch = 0.0, 0
     start_time = time.time()
     for epoch in range(num_epochs):
-        with tqdm(total=len(train_dataloader), desc=f"Epoch {epoch+1:3}/{num_epochs}", unit="batch", bar_format= '{l_bar}{bar:10}{r_bar}{bar:-10b}') as progress_bar:
+        with tqdm(total=len(train_dataloader), desc=f"Epoch {epoch+1:3}/{num_epochs}", unit="batch", bar_format='{l_bar}{bar:10}{r_bar}{bar:-10b}') as progress_bar:
             for x, y in train_dataloader:
                 step_start_time = time.time()
                 batch = {'input': x, 'label': y}
@@ -108,8 +109,6 @@ def train_and_evaluate(model: flax.linen.Module, train_dataloader, val_dataloade
             logits = jnp.concatenate(logits)
             y_true = jnp.concatenate(labels)
             if num_classes == 2:
-                if logits.shape[1] == 2:
-                    logits = logits[:, 1]
                 y_pred = [jax.nn.sigmoid(l) for l in logits]
             else:
                 y_pred = [jax.nn.softmax(l) for l in logits]
