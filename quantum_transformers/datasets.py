@@ -92,7 +92,7 @@ def get_mnist_dataloaders(data_dir: str = '~/data', batch_size: int = 1, drop_re
     data_dir = os.path.expanduser(data_dir)
 
     # Load datasets
-    train_dataset = tfds.load(name='mnist', split='train', as_supervised=True, data_dir=data_dir, shuffle_files=True)
+    train_dataset = tfds.load(name='mnist', split='train', as_supervised=True, data_dir=data_dir)
     valid_dataset = tfds.load(name='mnist', split='test', as_supervised=True, data_dir=data_dir)
 
     def normalize_image(image, label):
@@ -110,7 +110,7 @@ def get_electron_photon_dataloaders(data_dir: str = '~/data', batch_size: int = 
     electron_photon_builder = NumPyFolderDataset(data_dir=data_dir, name="electron-photon", gdrive_id="1VAqGQaMS5jSWV8gTXw39Opz-fNMsDZ8e",
                                                  img_shape=(32, 32, 2), num_classes=2)
     electron_photon_builder.download_and_prepare(download_dir=data_dir)
-    train_dataset = electron_photon_builder.as_dataset(split='train', as_supervised=True, shuffle_files=True)
+    train_dataset = electron_photon_builder.as_dataset(split='train', as_supervised=True)
     valid_dataset = electron_photon_builder.as_dataset(split='test', as_supervised=True)
 
     return datasets_to_dataloaders(train_dataset, valid_dataset, batch_size, drop_remainder=drop_remainder)
@@ -124,7 +124,7 @@ def get_quark_gluon_dataloaders(data_dir: str = '~/data', batch_size: int = 1, d
     quark_gluon_builder = NumPyFolderDataset(data_dir=data_dir, name="quark-gluon", gdrive_id="1G6HJKf3VtRSf7JLms2t1ofkYAldOKMls",
                                              img_shape=(125, 125, 3), num_classes=2)
     quark_gluon_builder.download_and_prepare(download_dir=data_dir)
-    train_dataset = quark_gluon_builder.as_dataset(split='train', as_supervised=True, shuffle_files=True)
+    train_dataset = quark_gluon_builder.as_dataset(split='train', as_supervised=True)
     valid_dataset = quark_gluon_builder.as_dataset(split='test', as_supervised=True)
 
     return datasets_to_dataloaders(train_dataset, valid_dataset, batch_size, drop_remainder=drop_remainder)
@@ -147,7 +147,7 @@ def get_imdb_dataloaders(data_dir: str = '~/data', batch_size: int = 1, drop_rem
     data_dir = os.path.expanduser(data_dir)
 
     # Load datasets
-    train_dataset = tfds.load(name='imdb_reviews', split='train', as_supervised=True, data_dir=data_dir, shuffle_files=True)
+    train_dataset = tfds.load(name='imdb_reviews', split='train', as_supervised=True, data_dir=data_dir)
     valid_dataset = tfds.load(name='imdb_reviews', split='test', as_supervised=True, data_dir=data_dir)
 
     # Build vocabulary and tokenizer
