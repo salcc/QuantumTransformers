@@ -150,6 +150,20 @@ class Transformer(nn.Module):
         return x
 
 
+def posemb_sincos_2d(sqrt_num_steps, hidden_size, temperature=10_000., dtype=jnp.float32):
+    """2D sin-cos position embedding. Follows the MoCo v3 logic."""
+    # Code adapted from https://github.com/google-research/big_vision/blob/184d1201eb34abe7da84fc69f84fd89a06ad43c4/big_vision/models/vit.py#L33.
+    y, x = jnp.mgrid[:sqrt_num_steps, :sqrt_num_steps]
+
+    assert hidden_size % 4 == 0, "hidden_size must be mult of 4 for 2D sin-cos position embedding"
+    omega = jnp.arange(hidden_size // 4) / (hidden_size // 4 - 1)
+    omega = 1. / (temperature**omega)
+    y = jnp.einsum("m,d->md", y.flatten(), omega)
+    x = jnp.einsum("m,d->md", x.flatten(), omega)
+    pe = jnp.concatenate([jnp.sin(x), jnp.cos(x), jnp.sin(y), jnp.cos(y)], axis=1)
+    return jnp.asarray(pe, dtype)[None, :, :]
+
+
 class VisionTransformer(nn.Module):
     num_classes: int
     patch_size: int
@@ -159,6 +173,7 @@ class VisionTransformer(nn.Module):
     mlp_hidden_size: int
     dropout: float = 0.1
     channels_last: bool = True
+    pos_embedding: Literal['none', 'learn', 'sincos'] = 'learn'
     classifier: Literal['token', 'gap'] = 'gap'
     quantum_attn_circuit: Optional[Callable] = None
     quantum_mlp_circuit: Optional[Callable] = None
@@ -187,7 +202,20 @@ class VisionTransformer(nn.Module):
             padding="VALID"
         )(x)
         # x.shape = (batch_size, sqrt(num_steps), sqrt(num_steps), hidden_size)
+        sqrt_num_steps = x.shape[1]
         x = jnp.reshape(x, (batch_size, num_steps, self.hidden_size))
+        # x.shape = (batch_size, num_steps, hidden_size)
+
+        # Positional embedding
+        if self.pos_embedding == 'learn':
+            x += self.param('pos_embedding', nn.initializers.normal(stddev=1 / jnp.sqrt(self.hidden_size)),
+                            (1, num_steps, self.hidden_size), x.dtype)
+        elif self.pos_embedding == 'sincos':
+            x += posemb_sincos_2d(sqrt_num_steps, self.hidden_size, dtype=x.dtype)
+        elif self.pos_embedding == 'none':
+            pass
+        else:
+            raise ValueError(f"Unknown positional embedding type: {self.pos_embedding}")
         # x.shape = (batch_size, num_steps, hidden_size)
 
         if self.classifier == 'token':
@@ -197,9 +225,6 @@ class VisionTransformer(nn.Module):
             x = jnp.concatenate([cls_token, x], axis=1)
             num_steps += 1
             # x.shape = (batch_size, num_steps, hidden_size)
-
-        # Positional embedding
-        x += self.param('pos_embedding', nn.initializers.normal(stddev=0.02), (1, num_steps, self.hidden_size))
 
         # Dropout
         x = nn.Dropout(rate=self.dropout)(x, deterministic=not train)
@@ -226,6 +251,8 @@ class VisionTransformer(nn.Module):
         elif self.classifier == 'gap':
             # Global average pooling
             x = jnp.mean(x, axis=1)
+        else:
+            raise ValueError(f"Unknown classifier type: {self.classifier}")
         # x.shape = (batch_size, hidden_size)
 
         # Classification logits
