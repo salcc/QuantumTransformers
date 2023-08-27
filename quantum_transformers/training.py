@@ -1,3 +1,4 @@
+from typing import Optional
 import time
 
 import jax
@@ -9,13 +10,16 @@ from sklearn.metrics import roc_auc_score
 from tqdm import tqdm
 
 
+TQDM_BAR_FORMAT = '{l_bar}{bar:10}{r_bar}{bar:-10b}'
+
+
 class TrainState(flax.training.train_state.TrainState):
     # See https://flax.readthedocs.io/en/latest/guides/dropout.html.
-    key: jax.random.KeyArray
+    key: jax.random.KeyArray  # type: ignore
 
 
 @jax.jit
-def train_step(state: TrainState, inputs, labels, key):
+def train_step(state: TrainState, inputs: jax.Array, labels: jax.Array, key: jax.random.KeyArray) -> TrainState:
     """
     Performs a single training step on the given batch of inputs and labels.
 
@@ -55,7 +59,7 @@ def train_step(state: TrainState, inputs, labels, key):
 
 
 @jax.jit
-def eval_step(state: TrainState, inputs, labels):
+def eval_step(state: TrainState, inputs: jax.Array, labels: jax.Array) -> tuple[float, jax.Array]:
     """
     Performs a single evaluation step on the given batch of inputs and labels.
 
@@ -83,8 +87,44 @@ def eval_step(state: TrainState, inputs, labels):
     return loss, logits
 
 
-def train_and_evaluate(model: flax.linen.Module, train_dataloader, val_dataloader, num_classes: int,
-                       num_epochs: int, seed: int = 42, verbose: bool = False) -> None:
+def evaluate(state: TrainState, eval_dataloader, num_classes: int, tqdm_desc: Optional[str] = None) -> tuple[float, float]:
+    """
+    Evaluates the model given the current training state on the given dataloader.
+
+    Args:
+        state: The current training state.
+        eval_dataloader: The dataloader to evaluate on.
+        num_classes: The number of classes.
+        tqdm_desc: The description to use for the tqdm progress bar. If None, no progress bar is shown.
+
+    Returns:
+        eval_loss: The loss.
+        eval_auc: The AUC.
+    """
+    logits, labels = [], []
+    eval_loss = 0.0
+    with tqdm(total=len(eval_dataloader), desc=tqdm_desc, unit="batch", bar_format=TQDM_BAR_FORMAT, disable=tqdm_desc is None) as progress_bar:
+        for inputs_batch, labels_batch in eval_dataloader:
+            loss_batch, logits_batch = eval_step(state, inputs_batch, labels_batch)
+            logits.append(logits_batch)
+            labels.append(labels_batch)
+            eval_loss += loss_batch
+            progress_bar.update(1)
+        eval_loss /= len(eval_dataloader)
+        logits = jnp.concatenate(logits)  # type: ignore
+        y_true = jnp.concatenate(labels)  # type: ignore
+        if num_classes == 2:
+            y_pred = [jax.nn.sigmoid(l) for l in logits]
+        else:
+            y_pred = [jax.nn.softmax(l) for l in logits]
+        eval_auc = 100.0 * roc_auc_score(y_true, y_pred, multi_class='ovr')
+        progress_bar.set_postfix_str(f"Loss = {eval_loss:.4f}, AUC = {eval_auc:.2f}%")
+    return eval_loss, eval_auc
+
+
+def train_and_evaluate(model: flax.linen.Module, train_dataloader, val_dataloader, test_dataloader, num_classes: int,
+                       num_epochs: int, lrs_peak_value: float = 1e-3, lrs_warmup_steps: int = 5_000, lrs_decay_steps: int = 50_000,
+                       seed: int = 42, use_wandb: bool = False, verbose: bool = False) -> None:
     """
     Trains the given model on the given dataloaders for the given hyperparameters.
 
@@ -98,11 +138,15 @@ def train_and_evaluate(model: flax.linen.Module, train_dataloader, val_dataloade
         num_epochs: The number of epochs to train for.
         learning_rate: The learning rate to use.
         seed: The seed to use for reproducibility.
+        use_wandb: Whether to use wandb for logging.
         verbose: Whether to print extra information.
 
     Returns:
         None
     """
+    if use_wandb:
+        import wandb
+
     root_key = jax.random.PRNGKey(seed=seed)
     root_key, params_key, train_key = jax.random.split(key=root_key, num=3)
 
@@ -117,17 +161,17 @@ def train_and_evaluate(model: flax.linen.Module, train_dataloader, val_dataloade
     if verbose:
         print(jax.tree_map(lambda x: x.shape, variables))
 
-    schedule = optax.warmup_cosine_decay_schedule(
+    learning_rate_schedule = optax.warmup_cosine_decay_schedule(
         init_value=0.0,
-        peak_value=1e-3,
-        warmup_steps=5_000,
-        decay_steps=50_000,
+        peak_value=lrs_peak_value,
+        warmup_steps=lrs_warmup_steps,
+        decay_steps=lrs_decay_steps,
         end_value=0.0
     )
 
     optimizer = optax.chain(
         optax.clip_by_global_norm(1.0),
-        optax.adamw(learning_rate=schedule),
+        optax.adamw(learning_rate=learning_rate_schedule),
     )
 
     state = TrainState.create(
@@ -137,10 +181,10 @@ def train_and_evaluate(model: flax.linen.Module, train_dataloader, val_dataloade
         tx=optimizer
     )
 
-    best_val_auc, best_epoch = 0.0, 0
+    best_val_auc, best_epoch, best_state = 0.0, 0, None
     start_time = time.time()
     for epoch in range(num_epochs):
-        with tqdm(total=len(train_dataloader), desc=f"Epoch {epoch+1:3}/{num_epochs}", unit="batch", bar_format='{l_bar}{bar:10}{r_bar}{bar:-10b}') as progress_bar:
+        with tqdm(total=len(train_dataloader), desc=f"Epoch {epoch+1:3}/{num_epochs}", unit="batch", bar_format=TQDM_BAR_FORMAT) as progress_bar:
             for inputs_batch, labels_batch in train_dataloader:
                 step_start_time = time.time()
                 state = train_step(state, inputs_batch, labels_batch, train_key)
@@ -148,27 +192,22 @@ def train_and_evaluate(model: flax.linen.Module, train_dataloader, val_dataloade
                 if verbose:
                     print(f" Step {state.step+1}/{len(train_dataloader)}: {time.time()-step_start_time:.2f}s")
 
-            logits, labels = [], []
-            val_loss = 0.0
-            for inputs_batch, labels_batch in val_dataloader:
-                loss_batch, logits_batch = eval_step(state, inputs_batch, labels_batch)
-                logits.append(logits_batch)
-                labels.append(labels_batch)
-                val_loss += loss_batch
-            val_loss /= len(val_dataloader)
-            logits = jnp.concatenate(logits)
-            y_true = jnp.concatenate(labels)
-            if num_classes == 2:
-                y_pred = [jax.nn.sigmoid(l) for l in logits]
-            else:
-                y_pred = [jax.nn.softmax(l) for l in logits]
-            val_auc = 100.0 * roc_auc_score(y_true, y_pred, multi_class='ovr')
-
+            val_loss, val_auc = evaluate(state, val_dataloader, num_classes, tqdm_desc=None)
             progress_bar.set_postfix_str(f"Loss = {val_loss:.4f}, AUC = {val_auc:.2f}%")
 
             if val_auc > best_val_auc:
                 best_val_auc = val_auc
                 best_epoch = epoch + 1
+                best_state = state
+            if use_wandb:
+                wandb.log({'val_loss': val_loss, 'val_auc': val_auc, 'best_val_auc': best_val_auc, 'best_epoch': best_epoch})
 
-    print(f"TOTAL TIME = {time.time()-start_time:.2f}s")
-    print(f"BEST AUC = {best_val_auc:.2f}% AT EPOCH {best_epoch}")
+    print(f"Total training time = {time.time()-start_time:.2f}s, best validation AUC = {best_val_auc:.2f}% at epoch {best_epoch}")
+
+    # Evaluate on test set using the best model
+    assert best_state is not None
+    test_los, test_auc = evaluate(best_state, test_dataloader, num_classes, tqdm_desc="Testing")
+    if use_wandb:
+        assert wandb.run is not None
+        wandb.run.summary["test_loss"] = test_los
+        wandb.run.summary["test_auc"] = test_auc

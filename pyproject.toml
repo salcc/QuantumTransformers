@@ -27,6 +27,7 @@ medmnist = "^2.2.2"
 qiskit = "^0.44.0"
 pylatexenc = "^2.10"
 tensorflow-text = "2.14.0rc0"
+wandb = "^0.15.8"
 
 
 [[tool.poetry.source]]

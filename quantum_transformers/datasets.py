@@ -66,25 +66,28 @@ class NumPyFolderDataset(tfds.core.GeneratorBasedBuilder):
                     print(e)
 
 
-def datasets_to_dataloaders(train_dataset, valid_dataset, batch_size, drop_remainder=True, transform=None):
+def datasets_to_dataloaders(train_dataset, val_dataset, test_dataset, batch_size, drop_remainder=True, transform=None):
     # Shuffle train dataset
     train_dataset = train_dataset.shuffle(train_dataset.cardinality(), reshuffle_each_iteration=True)
 
     # Batch
     train_dataset = train_dataset.batch(batch_size, drop_remainder=drop_remainder)
-    valid_dataset = valid_dataset.batch(batch_size, drop_remainder=drop_remainder)
+    val_dataset = val_dataset.batch(batch_size, drop_remainder=drop_remainder)
+    test_dataset = test_dataset.batch(batch_size, drop_remainder=drop_remainder)
 
     # Transform
     if transform is not None:
         train_dataset = train_dataset.map(transform, num_parallel_calls=tf.data.AUTOTUNE)
-        valid_dataset = valid_dataset.map(transform, num_parallel_calls=tf.data.AUTOTUNE)
+        val_dataset = val_dataset.map(transform, num_parallel_calls=tf.data.AUTOTUNE)
+        test_dataset = test_dataset.map(transform, num_parallel_calls=tf.data.AUTOTUNE)
 
     # Prefetch
     train_dataset = train_dataset.prefetch(tf.data.AUTOTUNE)
-    valid_dataset = valid_dataset.prefetch(tf.data.AUTOTUNE)
+    val_dataset = val_dataset.prefetch(tf.data.AUTOTUNE)
+    test_dataset = test_dataset.prefetch(tf.data.AUTOTUNE)
 
     # Convert to NumPy for JAX
-    return tfds.as_numpy(train_dataset), tfds.as_numpy(valid_dataset)
+    return tfds.as_numpy(train_dataset), tfds.as_numpy(val_dataset), tfds.as_numpy(test_dataset)
 
 
 def get_mnist_dataloaders(data_dir: str = '~/data', batch_size: int = 1, drop_remainder: bool = True):
@@ -92,14 +95,15 @@ def get_mnist_dataloaders(data_dir: str = '~/data', batch_size: int = 1, drop_re
     data_dir = os.path.expanduser(data_dir)
 
     # Load datasets
-    train_dataset = tfds.load(name='mnist', split='train', as_supervised=True, data_dir=data_dir)
-    valid_dataset = tfds.load(name='mnist', split='test', as_supervised=True, data_dir=data_dir)
+    train_dataset, val_dataset, test_dataset = tfds.load(name='mnist',
+                                                         split=['train[:90%]', 'train[90%:]', 'test'], as_supervised=True, data_dir=data_dir)
 
     def normalize_image(image, label):
         image = tf.cast(image, tf.float32) / 255.0
         return (image - 0.1307) / 0.3081, label
 
-    return datasets_to_dataloaders(train_dataset, valid_dataset, batch_size, drop_remainder=drop_remainder, transform=normalize_image)
+    return datasets_to_dataloaders(train_dataset, val_dataset, test_dataset, batch_size,
+                                   drop_remainder=drop_remainder, transform=normalize_image)
 
 
 def get_electron_photon_dataloaders(data_dir: str = '~/data', batch_size: int = 1, drop_remainder: bool = True):
@@ -110,10 +114,10 @@ def get_electron_photon_dataloaders(data_dir: str = '~/data', batch_size: int = 
     electron_photon_builder = NumPyFolderDataset(data_dir=data_dir, name="electron-photon", gdrive_id="1VAqGQaMS5jSWV8gTXw39Opz-fNMsDZ8e",
                                                  img_shape=(32, 32, 2), num_classes=2)
     electron_photon_builder.download_and_prepare(download_dir=data_dir)
-    train_dataset = electron_photon_builder.as_dataset(split='train', as_supervised=True)
-    valid_dataset = electron_photon_builder.as_dataset(split='test', as_supervised=True)
+    train_dataset, val_dataset, test_dataset = electron_photon_builder.as_dataset(split=['train[:90%]', 'train[90%:]', 'test'], as_supervised=True)
 
-    return datasets_to_dataloaders(train_dataset, valid_dataset, batch_size, drop_remainder=drop_remainder)
+    return datasets_to_dataloaders(train_dataset, val_dataset, test_dataset, batch_size,
+                                   drop_remainder=drop_remainder)
 
 
 def get_quark_gluon_dataloaders(data_dir: str = '~/data', batch_size: int = 1, drop_remainder: bool = True):
@@ -124,10 +128,10 @@ def get_quark_gluon_dataloaders(data_dir: str = '~/data', batch_size: int = 1, d
     quark_gluon_builder = NumPyFolderDataset(data_dir=data_dir, name="quark-gluon", gdrive_id="1G6HJKf3VtRSf7JLms2t1ofkYAldOKMls",
                                              img_shape=(125, 125, 3), num_classes=2)
     quark_gluon_builder.download_and_prepare(download_dir=data_dir)
-    train_dataset = quark_gluon_builder.as_dataset(split='train', as_supervised=True)
-    valid_dataset = quark_gluon_builder.as_dataset(split='test', as_supervised=True)
+    train_dataset, val_dataset, test_dataset = quark_gluon_builder.as_dataset(split=['train[:90%]', 'train[90%:]', 'test'], as_supervised=True)
 
-    return datasets_to_dataloaders(train_dataset, valid_dataset, batch_size, drop_remainder=drop_remainder)
+    return datasets_to_dataloaders(train_dataset, val_dataset, test_dataset, batch_size,
+                                   drop_remainder=drop_remainder)
 
 
 def get_medmnist_dataloaders(dataset: str, data_dir: str = '~/data', batch_size: int = 1, drop_remainder: bool = True):
@@ -136,7 +140,7 @@ def get_medmnist_dataloaders(dataset: str, data_dir: str = '~/data', batch_size:
 
 
 def get_imdb_dataloaders(data_dir: str = '~/data', batch_size: int = 1, drop_remainder: bool = True,
-                         max_vocab_size: int = 8192, max_seq_len: int = 512):
+                         max_vocab_size: int = 20_000, max_seq_len: int = 512):
     """
     Returns dataloaders for the IMDB sentiment analysis dataset (natural language processing, binary classification),
     as well as the vocabulary and tokenizer.
@@ -147,8 +151,8 @@ def get_imdb_dataloaders(data_dir: str = '~/data', batch_size: int = 1, drop_rem
     data_dir = os.path.expanduser(data_dir)
 
     # Load datasets
-    train_dataset = tfds.load(name='imdb_reviews', split='train', as_supervised=True, data_dir=data_dir)
-    valid_dataset = tfds.load(name='imdb_reviews', split='test', as_supervised=True, data_dir=data_dir)
+    train_dataset, val_dataset, test_dataset = tfds.load(name='imdb_reviews',
+                                                         split=['train[:90%]', 'train[90%:]', 'test'], as_supervised=True, data_dir=data_dir)
 
     # Build vocabulary and tokenizer
     bert_tokenizer_params = dict(lower_case=True)
@@ -174,4 +178,5 @@ def get_imdb_dataloaders(data_dir: str = '~/data', batch_size: int = 1, drop_rem
         padded_inputs, _ = tf_text.pad_model_inputs(tokens, max_seq_length=max_seq_len)
         return padded_inputs, label
 
-    return datasets_to_dataloaders(train_dataset, valid_dataset, batch_size, drop_remainder=drop_remainder, transform=preprocess), vocab, tokenizer
+    return datasets_to_dataloaders(train_dataset, val_dataset, test_dataset, batch_size,
+                                   drop_remainder=drop_remainder, transform=preprocess), vocab, tokenizer
