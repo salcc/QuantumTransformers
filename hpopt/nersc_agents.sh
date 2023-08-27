@@ -4,6 +4,7 @@ for _ in $(seq "${3}")
 do
     sbatch <<EOT
 #!/bin/bash
+#SBATCH --job-name="${1}"
 #SBATCH -Am4392
 #SBATCH -C gpu
 #SBATCH -q shared
@@ -11,7 +12,7 @@ do
 #SBATCH -n 1
 #SBATCH -c 32
 #SBATCH --gpus-per-task=1
-#SBATCH --output=/global/homes/s/salcc/QuantumTransformers/hpopt/logs/slurm-"${1}"-%j.out
+#SBATCH --output=/global/homes/s/salcc/QuantumTransformers/hpopt/logs/slurm-%x-%j.out
 
 export SLURM_CPU_BIND="cores"
 cd /global/homes/s/salcc/QuantumTransformers/hpopt
@@ -20,4 +21,4 @@ EOT
 done
 
 sleep 5
-squeue --me
+squeue --me -o "%.18i %.12P %.40j %.8u %.2t %.10M %.6D %R"
