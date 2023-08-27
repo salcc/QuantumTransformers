@@ -172,9 +172,9 @@ class VisionTransformer(nn.Module):
     num_transformer_blocks: int
     mlp_hidden_size: int
     dropout: float = 0.1
-    channels_last: bool = True
     pos_embedding: Literal['none', 'learn', 'sincos'] = 'learn'
     classifier: Literal['token', 'gap'] = 'gap'
+    channels_last: bool = True
     quantum_attn_circuit: Optional[Callable] = None
     quantum_mlp_circuit: Optional[Callable] = None
 
