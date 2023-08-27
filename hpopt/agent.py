@@ -48,7 +48,6 @@ def agent() -> None:
         model = VisionTransformer(num_classes=num_classes[c.dataset], patch_size=c.patch_size,
                                   hidden_size=c.hidden_size, num_heads=c.num_heads, num_transformer_blocks=c.num_transformer_blocks, mlp_hidden_size=c.mlp_hidden_size,
                                   pos_embedding=c.pos_embedding, dropout=c.dropout,
-                                  channels_last=c.dataset not in ['electron-photon', 'quark-gluon'],  # TODO: add medmnist if needed
                                   quantum_attn_circuit=get_circuit() if c.quantum else None, quantum_mlp_circuit=get_circuit() if c.quantum else None)
 
     train_and_evaluate(model=model, train_dataloader=train_dataloader, val_dataloader=val_dataloader, test_dataloader=test_dataloader, num_classes=num_classes[c.dataset],
