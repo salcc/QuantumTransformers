@@ -31,7 +31,7 @@ The results can be visualized in the [Weights & Biases](https://wandb.ai) dashbo
 
 To execute multiple runs in parallel, multiple agents have to be started.
 To do so in NERSC Perlmutter using SLURM, use the `nersc_agents.sh` script.
-For example, to start 10 agents, run (replace `XXXXXXXX` with the sweep ID):
+For example, to start 10 agents for the `mnist` dataset, run (replace `XXXXXXXX` with the sweep ID):
 
 ```bash
 bash nersc_agents.sh QuantumTransformers-mnist XXXXXXXX 10
