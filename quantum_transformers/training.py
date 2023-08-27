@@ -84,7 +84,7 @@ def eval_step(state: TrainState, inputs, labels):
 
 
 def train_and_evaluate(model: flax.linen.Module, train_dataloader, val_dataloader, num_classes: int,
-                       num_epochs: int, learning_rate: float = 0.0003, seed: int = 42, verbose: bool = False) -> None:
+                       num_epochs: int, seed: int = 42, verbose: bool = False) -> None:
     """
     Trains the given model on the given dataloaders for the given hyperparameters.
 
@@ -117,9 +117,17 @@ def train_and_evaluate(model: flax.linen.Module, train_dataloader, val_dataloade
     if verbose:
         print(jax.tree_map(lambda x: x.shape, variables))
 
+    schedule = optax.warmup_cosine_decay_schedule(
+        init_value=0.0,
+        peak_value=1e-3,
+        warmup_steps=5_000,
+        decay_steps=50_000,
+        end_value=0.0
+    )
+
     optimizer = optax.chain(
-        optax.clip(1.0),
-        optax.adamw(learning_rate=learning_rate),
+        optax.clip_by_global_norm(1.0),
+        optax.adamw(learning_rate=schedule),
     )
 
     state = TrainState.create(
