@@ -11,32 +11,32 @@ from quantum_transformers.quantum_layer import QuantumLayer
 
 
 class MultiHeadSelfAttention(nn.Module):
-    embed_dim: int
+    hidden_size: int
     num_heads: int
     dropout: float = 0.0
     quantum_circuit: Optional[Callable] = None
 
     @nn.compact
     def __call__(self, x, deterministic):
-        batch_size, seq_len, embed_dim = x.shape
-        # x.shape = (batch_size, seq_len, embed_dim)
-        assert embed_dim == self.embed_dim, f"Input embedding dimension ({embed_dim}) should match layer embedding dimension ({self.embed_dim})"
-        assert embed_dim % self.num_heads == 0, f"Input embedding dimension ({embed_dim}) should be divisible by number of heads ({self.num_heads})"
-        head_dim = embed_dim // self.num_heads
+        batch_size, seq_len, hidden_size = x.shape
+        # x.shape = (batch_size, seq_len, hidden_size)
+        assert hidden_size == self.hidden_size, f"Input hidden size ({hidden_size}) does not match layer hidden size ({self.hidden_size})"
+        assert hidden_size % self.num_heads == 0, f"Hidden size ({hidden_size}) must be divisible by the number of heads ({self.num_heads})"
+        head_dim = hidden_size // self.num_heads
 
         if self.quantum_circuit is None:
             q, k, v = [
                 proj(x).reshape(batch_size, seq_len, self.num_heads, head_dim).swapaxes(1, 2)
-                for proj, x in zip([nn.Dense(features=embed_dim),
-                                    nn.Dense(features=embed_dim),
-                                    nn.Dense(features=embed_dim)], [x, x, x])
+                for proj, x in zip([nn.Dense(features=hidden_size),
+                                    nn.Dense(features=hidden_size),
+                                    nn.Dense(features=hidden_size)], [x, x, x])
             ]
         else:
             q, k, v = [
                 proj(x).reshape(batch_size, seq_len, self.num_heads, head_dim).swapaxes(1, 2)
-                for proj, x in zip([QuantumLayer(num_qubits=embed_dim, circuit=self.quantum_circuit),
-                                    QuantumLayer(num_qubits=embed_dim, circuit=self.quantum_circuit),
-                                    QuantumLayer(num_qubits=embed_dim, circuit=self.quantum_circuit)], [x, x, x])
+                for proj, x in zip([QuantumLayer(num_qubits=hidden_size, circuit=self.quantum_circuit),
+                                    QuantumLayer(num_qubits=hidden_size, circuit=self.quantum_circuit),
+                                    QuantumLayer(num_qubits=hidden_size, circuit=self.quantum_circuit)], [x, x, x])
             ]
 
         # Compute scaled dot-product attention
@@ -49,13 +49,13 @@ class MultiHeadSelfAttention(nn.Module):
         # Compute output
         values = attn @ v
         # values.shape = (batch_size, num_heads, seq_len, head_dim)
-        values = values.swapaxes(1, 2).reshape(batch_size, seq_len, embed_dim)
-        # values.shape = (batch_size, seq_len, embed_dim)
+        values = values.swapaxes(1, 2).reshape(batch_size, seq_len, hidden_size)
+        # values.shape = (batch_size, seq_len, hidden_size)
         if self.quantum_circuit is None:
-            x = nn.Dense(features=embed_dim)(values)
+            x = nn.Dense(features=hidden_size)(values)
         else:
-            x = QuantumLayer(num_qubits=embed_dim, circuit=self.quantum_circuit)(values)
-        # x.shape = (batch_size, seq_len, embed_dim)
+            x = QuantumLayer(num_qubits=hidden_size, circuit=self.quantum_circuit)(values)
+        # x.shape = (batch_size, seq_len, hidden_size)
 
         return x
 
@@ -88,7 +88,7 @@ class TransformerBlock(nn.Module):
     @nn.compact
     def __call__(self, x, deterministic):
         attn_output = nn.LayerNorm()(x)
-        attn_output = MultiHeadSelfAttention(embed_dim=self.hidden_size, num_heads=self.num_heads, dropout=self.dropout,
+        attn_output = MultiHeadSelfAttention(hidden_size=self.hidden_size, num_heads=self.num_heads, dropout=self.dropout,
                                              quantum_circuit=self.quantum_attn_circuit)(attn_output, deterministic=deterministic)
         attn_output = nn.Dropout(rate=self.dropout)(attn_output, deterministic=deterministic)
         x = x + attn_output
@@ -155,7 +155,7 @@ def posemb_sincos_2d(sqrt_num_steps, hidden_size, temperature=10_000., dtype=jnp
     # Code adapted from https://github.com/google-research/big_vision/blob/184d1201eb34abe7da84fc69f84fd89a06ad43c4/big_vision/models/vit.py#L33.
     y, x = jnp.mgrid[:sqrt_num_steps, :sqrt_num_steps]
 
-    assert hidden_size % 4 == 0, "hidden_size must be mult of 4 for 2D sin-cos position embedding"
+    assert hidden_size % 4 == 0, f"Hidden size ({hidden_size}) must be divisible by 4 for 2D sin-cos position embedding"
     omega = jnp.arange(hidden_size // 4) / (hidden_size // 4 - 1)
     omega = 1. / (temperature**omega)
     y = jnp.einsum("m,d->md", y.flatten(), omega)
@@ -180,15 +180,15 @@ class VisionTransformer(nn.Module):
 
     @nn.compact
     def __call__(self, x, train):
-        assert x.ndim == 4, "Input must be a 4D tensor"
+        assert x.ndim == 4, f"Input must be 4D, got {x.ndim}D ({x.shape})"
 
         if not self.channels_last:
             x = x.transpose((0, 3, 1, 2))
         # x.shape = (batch_size, height, width, num_channels)
         # Note that JAX's Conv expects the input to be in the format (batch_size, height, width, num_channels)
 
-        batch_size, height, width, num_channels = x.shape
-        assert height == width, "Input must be square"
+        batch_size, height, width, _ = x.shape
+        assert height == width, f"Input must be square, got {height}x{width}"
         img_size = height
         num_steps = (img_size // self.patch_size) ** 2
 
