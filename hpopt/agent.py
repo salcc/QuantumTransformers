@@ -23,8 +23,8 @@ def agent() -> None:
     model: Transformer | VisionTransformer
     if c.dataset in ['imdb']:  # Text datasets
         if c.dataset == 'imdb':
-            (train_dataloader, val_dataloader, test_dataloader), vocab, _ = c.datasets.get_imdb_dataloaders(data_dir=c.data_dir, batch_size=c.batch_size,
-                                                                                                            max_seq_len=c.max_seq_len, vocab_size=c.vocab_size)
+            (train_dataloader, val_dataloader, test_dataloader), vocab, _ = datasets.get_imdb_dataloaders(data_dir=c.data_dir, batch_size=c.batch_size,
+                                                                                                          max_seq_len=c.max_seq_len, max_vocab_size=c.vocab_size)
         else:
             raise ValueError(f"Unknown dataset {c.dataset}")
 
@@ -60,6 +60,5 @@ if __name__ == '__main__':
     argparser.add_argument('project_name', type=str, help='name of wandb project to run sweep in')
     argparser.add_argument('sweep_id', type=str, help='ID of wandb sweep to run')
     args = argparser.parse_args()
-
 
     wandb.agent(args.sweep_id, project=args.project_name, function=agent, count=1)
