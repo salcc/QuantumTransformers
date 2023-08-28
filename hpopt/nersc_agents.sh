@@ -1,8 +1,12 @@
 #!/bin/bash
 
-for _ in $(seq "${3}")
-do
-    sbatch <<EOT
+read -p "Are you sure you want to submit ${3} jobs? ([y]es or [N]o) " -n 1 -r
+echo
+if [[ $REPLY =~ ^[Yy]$ ]]
+then
+    for _ in $(seq "${3}")
+    do
+        sbatch <<EOT
 #!/bin/bash
 #SBATCH --job-name="${1}"
 #SBATCH -Am4392
@@ -18,7 +22,8 @@ export SLURM_CPU_BIND="cores"
 cd /global/homes/s/salcc/QuantumTransformers/hpopt
 python agent.py "${1}" "${2}"
 EOT
-done
+    done
 
-sleep 5
-squeue --me -o "%.18i %.12P %.40j %.8u %.2t %.10M %.6D %R"
+    sleep 5
+    squeue --me -o "%.18i %.12P %.40j %.8u %.2t %.10M %.6D %R"
+fi    
