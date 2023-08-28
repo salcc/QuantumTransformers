@@ -33,7 +33,7 @@ if __name__ == '__main__':
             'min_iter': 10
         }
     }
-    
+
     project_name = 'QuantumTransformers-' + args.dataset + ('-quantum' if args.quantum else '')
     sweep_id = wandb.sweep(sweep_config, project=project_name)
     print()
