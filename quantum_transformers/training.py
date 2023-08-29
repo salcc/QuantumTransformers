@@ -154,7 +154,8 @@ def train_and_evaluate(model: flax.linen.Module, train_dataloader, val_dataloade
     input_shape = dummy_batch[0].shape
     input_dtype = dummy_batch[0].dtype
     batch_size = len(dummy_batch)
-    inputs_batch = jnp.zeros(shape=(batch_size,) + tuple(input_shape), dtype=input_dtype)  # Dummy input
+    root_key, input_key = jax.random.split(key=root_key)
+    inputs_batch = jax.random.uniform(key=input_key, shape=(batch_size,) + tuple(input_shape), dtype=input_dtype)  # Dummy input
 
     variables = model.init(params_key, inputs_batch, train=False)
 
