@@ -87,7 +87,8 @@ def eval_step(state: TrainState, inputs: jax.Array, labels: jax.Array) -> tuple[
     return loss, logits
 
 
-def evaluate(state: TrainState, eval_dataloader, num_classes: int, tqdm_desc: Optional[str] = None) -> tuple[float, float]:
+def evaluate(state: TrainState, eval_dataloader, num_classes: int,
+             tqdm_desc: Optional[str] = None, debug: bool = False) -> tuple[float, float]:
     """
     Evaluates the model given the current training state on the given dataloader.
 
@@ -96,6 +97,7 @@ def evaluate(state: TrainState, eval_dataloader, num_classes: int, tqdm_desc: Op
         eval_dataloader: The dataloader to evaluate on.
         num_classes: The number of classes.
         tqdm_desc: The description to use for the tqdm progress bar. If None, no progress bar is shown.
+        debug: Whether to print extra information for debugging.
 
     Returns:
         eval_loss: The loss.
@@ -113,10 +115,15 @@ def evaluate(state: TrainState, eval_dataloader, num_classes: int, tqdm_desc: Op
         eval_loss /= len(eval_dataloader)
         logits = jnp.concatenate(logits)  # type: ignore
         y_true = jnp.concatenate(labels)  # type: ignore
+        if debug:
+            print(f"logits = {logits}")
         if num_classes == 2:
             y_pred = [jax.nn.sigmoid(l) for l in logits]
         else:
             y_pred = [jax.nn.softmax(l) for l in logits]
+        if debug:
+            print(f"y_pred = {y_pred}")
+            print(f"y_true = {y_true}")
         eval_auc = 100.0 * roc_auc_score(y_true, y_pred, multi_class='ovr')
         progress_bar.set_postfix_str(f"Loss = {eval_loss:.4f}, AUC = {eval_auc:.2f}%")
     return eval_loss, eval_auc
@@ -124,7 +131,7 @@ def evaluate(state: TrainState, eval_dataloader, num_classes: int, tqdm_desc: Op
 
 def train_and_evaluate(model: flax.linen.Module, train_dataloader, val_dataloader, test_dataloader, num_classes: int,
                        num_epochs: int, lrs_peak_value: float = 1e-3, lrs_warmup_steps: int = 5_000, lrs_decay_steps: int = 50_000,
-                       seed: int = 42, use_wandb: bool = False, verbose: bool = False) -> None:
+                       seed: int = 42, use_wandb: bool = False, debug: bool = False) -> None:
     """
     Trains the given model on the given dataloaders for the given hyperparameters.
 
@@ -139,7 +146,7 @@ def train_and_evaluate(model: flax.linen.Module, train_dataloader, val_dataloade
         learning_rate: The learning rate to use.
         seed: The seed to use for reproducibility.
         use_wandb: Whether to use wandb for logging.
-        verbose: Whether to print extra information.
+        debug: Whether to print extra information for debugging.
 
     Returns:
         None
@@ -159,7 +166,7 @@ def train_and_evaluate(model: flax.linen.Module, train_dataloader, val_dataloade
 
     variables = model.init(params_key, inputs_batch, train=False)
 
-    if verbose:
+    if debug:
         print(jax.tree_map(lambda x: x.shape, variables))
 
     learning_rate_schedule = optax.warmup_cosine_decay_schedule(
@@ -187,13 +194,10 @@ def train_and_evaluate(model: flax.linen.Module, train_dataloader, val_dataloade
     for epoch in range(num_epochs):
         with tqdm(total=len(train_dataloader), desc=f"Epoch {epoch+1:3}/{num_epochs}", unit="batch", bar_format=TQDM_BAR_FORMAT) as progress_bar:
             for inputs_batch, labels_batch in train_dataloader:
-                step_start_time = time.time()
                 state = train_step(state, inputs_batch, labels_batch, train_key)
                 progress_bar.update(1)
-                if verbose:
-                    print(f" Step {state.step+1}/{len(train_dataloader)}: {time.time()-step_start_time:.2f}s")
 
-            val_loss, val_auc = evaluate(state, val_dataloader, num_classes, tqdm_desc=None)
+            val_loss, val_auc = evaluate(state, val_dataloader, num_classes, tqdm_desc=None, debug=debug)
             progress_bar.set_postfix_str(f"Loss = {val_loss:.4f}, AUC = {val_auc:.2f}%")
 
             if val_auc > best_val_auc:
