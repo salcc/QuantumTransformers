@@ -131,7 +131,7 @@ def evaluate(state: TrainState, eval_dataloader, num_classes: int,
 
 def train_and_evaluate(model: flax.linen.Module, train_dataloader, val_dataloader, test_dataloader, num_classes: int,
                        num_epochs: int, lrs_peak_value: float = 1e-3, lrs_warmup_steps: int = 5_000, lrs_decay_steps: int = 50_000,
-                       seed: int = 42, use_wandb: bool = False, debug: bool = False) -> None:
+                       seed: int = 42, use_ray: bool = False, debug: bool = False) -> None:
     """
     Trains the given model on the given dataloaders for the given hyperparameters.
 
@@ -145,14 +145,14 @@ def train_and_evaluate(model: flax.linen.Module, train_dataloader, val_dataloade
         num_epochs: The number of epochs to train for.
         learning_rate: The learning rate to use.
         seed: The seed to use for reproducibility.
-        use_wandb: Whether to use wandb for logging.
+        use_ray: Whether to use Ray for logging.
         debug: Whether to print extra information for debugging.
 
     Returns:
         None
     """
-    if use_wandb:
-        import wandb
+    if use_ray:
+        from ray.air import session
 
     root_key = jax.random.PRNGKey(seed=seed)
     root_key, params_key, train_key = jax.random.split(key=root_key, num=3)
@@ -204,15 +204,13 @@ def train_and_evaluate(model: flax.linen.Module, train_dataloader, val_dataloade
                 best_val_auc = val_auc
                 best_epoch = epoch + 1
                 best_state = state
-            if use_wandb:
-                wandb.log({'val_loss': val_loss, 'val_auc': val_auc, 'best_val_auc': best_val_auc, 'best_epoch': best_epoch})
+            if use_ray:
+                session.report({'val_loss': val_loss, 'val_auc': val_auc, 'best_val_auc': best_val_auc, 'best_epoch': best_epoch})
 
     print(f"Total training time = {time.time()-start_time:.2f}s, best validation AUC = {best_val_auc:.2f}% at epoch {best_epoch}")
 
     # Evaluate on test set using the best model
     assert best_state is not None
     test_los, test_auc = evaluate(best_state, test_dataloader, num_classes, tqdm_desc="Testing")
-    if use_wandb:
-        assert wandb.run is not None
-        wandb.run.summary["test_loss"] = test_los
-        wandb.run.summary["test_auc"] = test_auc
+    if use_ray:
+        session.report({'test_loss': test_los, 'test_auc': test_auc})

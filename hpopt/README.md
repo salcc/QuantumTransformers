@@ -1,41 +1,15 @@
 # Hyperparameter Optimization
 
-## Start a hyperparameter sweep
+The code in this directory is intended to be used in NERSC Perlmutter.
 
-To start the hyperparameter sweep, for example, for the `mnist` dataset, run:
-
-```bash
-python sweep.py mnist
-```
-
-This will output the project name (`QuantumTransformers-mnist` in this case) and the sweep ID, which can be used to start the agents.
-
-Use `--config <config_file>` to use another configuration file path (default: `config.json`).
-
-Use the `--quantum` flag to use quantum transformers.
-
-## Start one agent
-
-> **Note**
-> If you want to run multiple agents in parallel, see the section below.
-
-To start an agent to execute the created hyperparameter sweep, for example, for the `mnist` dataset, run (replace `XXXXXXXX` with the sweep ID):
+Execute submit-ray-cluster.sh to run the hyperparameter optimization for a given dataset and number of trials.
+For example, to run 50 trials of hyperparameter optimization for the MNIST dataset, execute the following command:
 
 ```bash
-python agent.py QuantumTransformers-mnist XXXXXXXX
+bash submit-ray-cluster.sh mnist 50
 ```
 
-The results can be visualized in the [Weights & Biases](https://wandb.ai) dashboard.
+After the two required parameters (dataset name and number of trials), the script accepts the following optional parameters:
+- `--quantum`: whether to use quantum transformers
 
-## Start multiple agents in parallel (NERSC Perlmutter)
-
-To execute multiple runs in parallel, multiple agents have to be started.
-To do so in NERSC Perlmutter using SLURM, use the `nersc_agents.sh` script.
-For example, to start 10 agents for the `mnist` dataset, run (replace `XXXXXXXX` with the sweep ID):
-
-```bash
-bash nersc_agents.sh QuantumTransformers-mnist XXXXXXXX 10
-```
-
-Note that the script has to be modified to use your own account and project, and possibly different options if using a different system.
-
+Note that the script has to be modified to use your own project, and possibly different options if using a different system.
