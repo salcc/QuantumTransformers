@@ -91,7 +91,11 @@ def datasets_to_dataloaders(train_dataset, val_dataset, test_dataset, batch_size
 
 
 def get_mnist_dataloaders(data_dir: str = '~/data', batch_size: int = 1, drop_remainder: bool = True):
-    """Returns dataloaders for the MNIST dataset (computer vision, multi-class classification)"""
+    """
+    Returns dataloaders for the MNIST dataset (computer vision, multi-class classification)
+
+    Information about the dataset: https://www.tensorflow.org/datasets/catalog/mnist
+    """
     data_dir = os.path.expanduser(data_dir)
 
     # Load datasets
@@ -107,7 +111,11 @@ def get_mnist_dataloaders(data_dir: str = '~/data', batch_size: int = 1, drop_re
 
 
 def get_electron_photon_dataloaders(data_dir: str = '~/data', batch_size: int = 1, drop_remainder: bool = True):
-    """Returns dataloaders for the electron-photon dataset (computer vision - particle physics, binary classification)"""
+    """
+    Returns dataloaders for the electron-photon dataset (computer vision - particle physics, binary classification)
+
+    Information about the dataset: https://arxiv.org/abs/1807.11916
+    """
     data_dir = os.path.expanduser(data_dir)
 
     # Load datasets
@@ -121,7 +129,11 @@ def get_electron_photon_dataloaders(data_dir: str = '~/data', batch_size: int = 
 
 
 def get_quark_gluon_dataloaders(data_dir: str = '~/data', batch_size: int = 1, drop_remainder: bool = True):
-    """Returns dataloaders for the quark-gluon dataset (computer vision - particle physics, binary classification)"""
+    """
+    Returns dataloaders for the quark-gluon dataset (computer vision - particle physics, binary classification)
+
+    Information about the dataset: https://arxiv.org/abs/1902.08276
+    """
     data_dir = os.path.expanduser(data_dir)
 
     # Load datasets
@@ -135,7 +147,11 @@ def get_quark_gluon_dataloaders(data_dir: str = '~/data', batch_size: int = 1, d
 
 
 def get_medmnist_dataloaders(dataset: str, data_dir: str = '~/data', batch_size: int = 1, drop_remainder: bool = True):
-    """Returns dataloaders for a MedMNIST dataset"""
+    """
+    Returns dataloaders for a MedMNIST dataset
+    
+    Information about the dataset: https://medmnist.com/
+    """
     raise NotImplementedError
 
 
@@ -144,6 +160,8 @@ def get_imdb_dataloaders(data_dir: str = '~/data', batch_size: int = 1, drop_rem
     """
     Returns dataloaders for the IMDB sentiment analysis dataset (natural language processing, binary classification),
     as well as the vocabulary and tokenizer.
+
+    Information about the dataset: https://www.tensorflow.org/datasets/catalog/imdb_reviews
     """
     import tensorflow_text as tf_text
     from tensorflow_text.tools.wordpiece_vocab.bert_vocab_from_dataset import bert_vocab_from_dataset
