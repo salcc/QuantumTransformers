@@ -1,12 +1,13 @@
 from typing import Optional
 import time
 
+import numpy.typing as npt
 import jax
 import jax.numpy as jnp
 import flax.linen
 import flax.training.train_state
 import optax
-from sklearn.metrics import roc_auc_score
+from sklearn.metrics import roc_auc_score, roc_curve, auc
 from tqdm import tqdm
 
 
@@ -88,7 +89,7 @@ def eval_step(state: TrainState, inputs: jax.Array, labels: jax.Array) -> tuple[
 
 
 def evaluate(state: TrainState, eval_dataloader, num_classes: int,
-             tqdm_desc: Optional[str] = None, debug: bool = False) -> tuple[float, float]:
+             tqdm_desc: Optional[str] = None, debug: bool = False) -> tuple[float, float, npt.ArrayLike, npt.ArrayLike]:
     """
     Evaluates the model given the current training state on the given dataloader.
 
@@ -124,14 +125,19 @@ def evaluate(state: TrainState, eval_dataloader, num_classes: int,
         if debug:
             print(f"y_pred = {y_pred}")
             print(f"y_true = {y_true}")
-        eval_auc = 100.0 * roc_auc_score(y_true, y_pred, multi_class='ovr')
+        if num_classes == 2:
+            eval_fpr, eval_tpr, _ = roc_curve(y_true, y_pred)
+            eval_auc = 100.0 * auc(eval_fpr, eval_tpr)
+        else:
+            eval_fpr, eval_tpr = [], []
+            eval_auc = 100.0 * roc_auc_score(y_true, y_pred, multi_class='ovr')
         progress_bar.set_postfix_str(f"Loss = {eval_loss:.4f}, AUC = {eval_auc:.2f}%")
-    return eval_loss, eval_auc
+    return eval_loss, eval_auc, eval_fpr, eval_tpr
 
 
 def train_and_evaluate(model: flax.linen.Module, train_dataloader, val_dataloader, test_dataloader, num_classes: int,
                        num_epochs: int, lrs_peak_value: float = 1e-3, lrs_warmup_steps: int = 5_000, lrs_decay_steps: int = 50_000,
-                       seed: int = 42, use_ray: bool = False, debug: bool = False) -> None:
+                       seed: int = 42, use_ray: bool = False, debug: bool = False) -> tuple[float, float, npt.ArrayLike, npt.ArrayLike]:
     """
     Trains the given model on the given dataloaders for the given hyperparameters.
 
@@ -168,6 +174,7 @@ def train_and_evaluate(model: flax.linen.Module, train_dataloader, val_dataloade
 
     if debug:
         print(jax.tree_map(lambda x: x.shape, variables))
+    print(f"Number of parameters = {sum(x.size for x in jax.tree_util.tree_leaves(variables))}")
 
     learning_rate_schedule = optax.warmup_cosine_decay_schedule(
         init_value=0.0,
@@ -197,7 +204,7 @@ def train_and_evaluate(model: flax.linen.Module, train_dataloader, val_dataloade
                 state = train_step(state, inputs_batch, labels_batch, train_key)
                 progress_bar.update(1)
 
-            val_loss, val_auc = evaluate(state, val_dataloader, num_classes, tqdm_desc=None, debug=debug)
+            val_loss, val_auc, _, _ = evaluate(state, val_dataloader, num_classes, tqdm_desc=None, debug=debug)
             progress_bar.set_postfix_str(f"Loss = {val_loss:.4f}, AUC = {val_auc:.2f}%")
 
             if val_auc > best_val_auc:
@@ -211,6 +218,8 @@ def train_and_evaluate(model: flax.linen.Module, train_dataloader, val_dataloade
 
     # Evaluate on test set using the best model
     assert best_state is not None
-    test_los, test_auc = evaluate(best_state, test_dataloader, num_classes, tqdm_desc="Testing")
+    test_loss, test_auc, test_fpr, test_tpr = evaluate(best_state, test_dataloader, num_classes, tqdm_desc="Testing")
     if use_ray:
-        session.report({'test_loss': test_los, 'test_auc': test_auc})
+        session.report({'test_loss': test_loss, 'test_auc': test_auc})
+    return test_loss, test_auc, test_fpr, test_tpr
+    
