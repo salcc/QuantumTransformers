@@ -8,20 +8,23 @@ import tensorflow as tf
 # Ensure TF does not see GPU and grab all GPU memory.
 tf.config.set_visible_devices([], device_type='GPU')
 
+options = tf.data.Options()
+options.deterministic = True
+
 
 class NumPyFolderDataset(tfds.core.GeneratorBasedBuilder):
     """
-    A dataset consisting of NumPy arrays stored in folders (one folder per class),
-    downloaded from Google Drive in .tar.xz format.
+    A dataset consisting of NumPy arrays stored in folders (one folder per class).
     """
     VERSION = tfds.core.Version('1.0.0')  # to avoid ValueError
 
-    def __init__(self, name, gdrive_id, img_shape, num_classes, **kwargs):
+    def __init__(self, name, img_shape, num_classes, extracted_data_path=None, gdrive_id=None, **kwargs):
         """Creates a NumPyFolderDataset."""
         self.name = name
-        self.gdrive_id = gdrive_id
         self.img_shape = img_shape
         self.num_classes = num_classes
+        self.extracted_data_path = extracted_data_path
+        self.gdrive_id = gdrive_id
         super().__init__(**kwargs)
 
     def _info(self) -> tfds.core.DatasetInfo:
@@ -36,17 +39,21 @@ class NumPyFolderDataset(tfds.core.GeneratorBasedBuilder):
 
     def _split_generators(self, _):
         """Returns SplitGenerators."""
-        if os.path.exists(f'{self.data_dir}/{self.name}'):
-            print(f'{self.data_dir}/{self.name} already exists, skipping download')
-        else:
+        if self.extracted_data_path is not None:
+            print(f'Using existing data at {self.extracted_data_path}')
+            dataset_path = self.extracted_data_path
+        elif self.gdrive_id is not None:
             os.makedirs(f'{self.data_dir}/{self.name}')
             gdown.download(id=self.gdrive_id, output=f'{self.data_dir}/{self.name}.tar.xz', quiet=False)
             with tarfile.open(f'{self.data_dir}/{self.name}.tar.xz', 'r:xz') as f:
                 print(f'Extracting {self.name}.tar.xz to {self.data_dir}')
                 f.extractall(self.data_dir)
             os.remove(f'{self.data_dir}/{self.name}.tar.xz')
+            dataset_path = f'{self.data_dir}/{self.name}'
+        else:
+            raise ValueError('Either extracted_data_path or gdrive_id must be provided')
 
-        dataset_path = tfds.core.Path(f'{self.data_dir}/{self.name}')
+        dataset_path = tfds.core.Path(dataset_path)
         return {
             'train': self._generate_examples(dataset_path / 'train'),
             'test': self._generate_examples(dataset_path / 'test'),
@@ -58,8 +65,17 @@ class NumPyFolderDataset(tfds.core.GeneratorBasedBuilder):
         for class_folder in path.glob('*'):
             for f in class_folder.glob('*.npy'):
                 try:
+                    image = np.load(f).astype(np.float32)
+                    if image.shape != self.img_shape:
+                        # Try to transpose if channels are in the wrong place
+                        if image.shape[0] == self.img_shape[-1]:
+                            image = np.transpose(image, (1, 2, 0))
+                        elif image.shape[-1] == self.img_shape[0]:
+                            image = np.transpose(image, (2, 0, 1))
+                        else:
+                            raise ValueError(f'Unexpected image shape {image.shape} for {f}')
                     yield f"{class_folder.name}_{f.name}", {
-                        'image': np.load(f),
+                        'image': image,
                         'label': class_names[class_folder.name],
                     }
                 except FileNotFoundError as e:
@@ -68,7 +84,7 @@ class NumPyFolderDataset(tfds.core.GeneratorBasedBuilder):
 
 def datasets_to_dataloaders(train_dataset, val_dataset, test_dataset, batch_size, drop_remainder=True, transform=None):
     # Shuffle train dataset
-    train_dataset = train_dataset.shuffle(train_dataset.cardinality(), reshuffle_each_iteration=True)
+    train_dataset = train_dataset.shuffle(10_000, reshuffle_each_iteration=True)
 
     # Batch
     train_dataset = train_dataset.batch(batch_size, drop_remainder=drop_remainder)
@@ -100,7 +116,9 @@ def get_mnist_dataloaders(data_dir: str = '~/data', batch_size: int = 1, drop_re
 
     # Load datasets
     train_dataset, val_dataset, test_dataset = tfds.load(name='mnist',
-                                                         split=['train[:90%]', 'train[90%:]', 'test'], as_supervised=True, data_dir=data_dir)
+                                                         split=['train[:90%]', 'train[90%:]', 'test'], as_supervised=True, data_dir=data_dir, shuffle_files=True)
+    train_dataset, val_dataset, test_dataset = train_dataset.with_options(options), val_dataset.with_options(options), test_dataset.with_options(options)
+    print("Cardinalities (train, val, test):", train_dataset.cardinality().numpy(), val_dataset.cardinality().numpy(), test_dataset.cardinality().numpy())
 
     def normalize_image(image, label):
         image = tf.cast(image, tf.float32) / 255.0
@@ -122,7 +140,9 @@ def get_electron_photon_dataloaders(data_dir: str = '~/data', batch_size: int = 
     electron_photon_builder = NumPyFolderDataset(data_dir=data_dir, name="electron-photon", gdrive_id="1VAqGQaMS5jSWV8gTXw39Opz-fNMsDZ8e",
                                                  img_shape=(32, 32, 2), num_classes=2)
     electron_photon_builder.download_and_prepare(download_dir=data_dir)
-    train_dataset, val_dataset, test_dataset = electron_photon_builder.as_dataset(split=['train[:90%]', 'train[90%:]', 'test'], as_supervised=True)
+    train_dataset, val_dataset, test_dataset = electron_photon_builder.as_dataset(split=['train[:90%]', 'train[90%:]', 'test'], as_supervised=True, shuffle_files=True)
+    train_dataset, val_dataset, test_dataset = train_dataset.with_options(options), val_dataset.with_options(options), test_dataset.with_options(options)
+    print("Cardinalities (train, val, test):", train_dataset.cardinality().numpy(), val_dataset.cardinality().numpy(), test_dataset.cardinality().numpy())
 
     return datasets_to_dataloaders(train_dataset, val_dataset, test_dataset, batch_size,
                                    drop_remainder=drop_remainder)
@@ -137,10 +157,12 @@ def get_quark_gluon_dataloaders(data_dir: str = '~/data', batch_size: int = 1, d
     data_dir = os.path.expanduser(data_dir)
 
     # Load datasets
-    quark_gluon_builder = NumPyFolderDataset(data_dir=data_dir, name="quark-gluon", gdrive_id="1G6HJKf3VtRSf7JLms2t1ofkYAldOKMls",
+    quark_gluon_builder = NumPyFolderDataset(data_dir=data_dir, name="quark-gluon", gdrive_id="1PL2YEr5V__zUZVuUfGdUvFTkE9ULHayz",
                                              img_shape=(125, 125, 3), num_classes=2)
     quark_gluon_builder.download_and_prepare(download_dir=data_dir)
-    train_dataset, val_dataset, test_dataset = quark_gluon_builder.as_dataset(split=['train[:90%]', 'train[90%:]', 'test'], as_supervised=True)
+    train_dataset, val_dataset, test_dataset = quark_gluon_builder.as_dataset(split=['train[:90%]', 'train[90%:]', 'test'], as_supervised=True, shuffle_files=True)
+    train_dataset, val_dataset, test_dataset = train_dataset.with_options(options), val_dataset.with_options(options), test_dataset.with_options(options)
+    print("Cardinalities (train, val, test):", train_dataset.cardinality().numpy(), val_dataset.cardinality().numpy(), test_dataset.cardinality().numpy())
 
     return datasets_to_dataloaders(train_dataset, val_dataset, test_dataset, batch_size,
                                    drop_remainder=drop_remainder)
@@ -149,7 +171,7 @@ def get_quark_gluon_dataloaders(data_dir: str = '~/data', batch_size: int = 1, d
 def get_medmnist_dataloaders(dataset: str, data_dir: str = '~/data', batch_size: int = 1, drop_remainder: bool = True):
     """
     Returns dataloaders for a MedMNIST dataset
-    
+
     Information about the dataset: https://medmnist.com/
     """
     raise NotImplementedError
@@ -170,7 +192,9 @@ def get_imdb_dataloaders(data_dir: str = '~/data', batch_size: int = 1, drop_rem
 
     # Load datasets
     train_dataset, val_dataset, test_dataset = tfds.load(name='imdb_reviews',
-                                                         split=['train[:90%]', 'train[90%:]', 'test'], as_supervised=True, data_dir=data_dir)
+                                                         split=['train[:90%]', 'train[90%:]', 'test'], as_supervised=True, data_dir=data_dir, shuffle_files=True)
+    train_dataset, val_dataset, test_dataset = train_dataset.with_options(options), val_dataset.with_options(options), test_dataset.with_options(options)
+    print("Cardinalities (train, val, test):", train_dataset.cardinality().numpy(), val_dataset.cardinality().numpy(), test_dataset.cardinality().numpy())
 
     # Build vocabulary and tokenizer
     bert_tokenizer_params = dict(lower_case=True)
