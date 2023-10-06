@@ -4330,14 +4330,14 @@ tensorflow-rocm = ["tensorflow-rocm (>=2.13.0,<2.14.0)"]
 
 [[package]]
 name = "tensorflow-macos"
-version = "2.14.0rc0"
+version = "2.14.0"
 description = "TensorFlow is an open source machine learning framework for everyone."
 optional = false
 python-versions = ">=3.9"
 files = [
-    {file = "tensorflow_macos-2.14.0rc0-cp310-cp310-macosx_12_0_arm64.whl", hash = "sha256:46c15c56387c8c72a4eac3f2aab0cd4eaa081dac12ddc061b96f2132d9284638"},
-    {file = "tensorflow_macos-2.14.0rc0-cp311-cp311-macosx_12_0_arm64.whl", hash = "sha256:261639c7f03e77c0f005d7622cb57cc5f561127420299d03f857ce28c24beb97"},
-    {file = "tensorflow_macos-2.14.0rc0-cp39-cp39-macosx_12_0_arm64.whl", hash = "sha256:6157198682d38ff3ca98276f89044a1944421599ec94c260b87ff52889dee6d8"},
+    {file = "tensorflow_macos-2.14.0-cp310-cp310-macosx_12_0_arm64.whl", hash = "sha256:31fa670b0afd2a52b3ad15bab97a0d0aae28c4ea2a96ab7f0a91e8844390bfb0"},
+    {file = "tensorflow_macos-2.14.0-cp311-cp311-macosx_12_0_arm64.whl", hash = "sha256:064e98b67d7a89e72c37c90254c0a322a0b8d0ce9b68f23286816210e3ef6685"},
+    {file = "tensorflow_macos-2.14.0-cp39-cp39-macosx_12_0_arm64.whl", hash = "sha256:7b3e4e01721bfc0105c99275113531a659e89fd6512340a7b8970593676e0114"},
 ]
 
 [package.dependencies]
@@ -4348,9 +4348,9 @@ gast = ">=0.2.1,<0.5.0 || >0.5.0,<0.5.1 || >0.5.1,<0.5.2 || >0.5.2"
 google-pasta = ">=0.1.1"
 grpcio = ">=1.24.3,<2.0"
 h5py = ">=2.9.0"
-keras = ">=2.14.0rc0,<2.15"
+keras = ">=2.14.0,<2.15"
 libclang = ">=13.0.0"
-ml-dtypes = ">=0.2.0"
+ml-dtypes = "0.2.0"
 numpy = ">=1.23.5"
 opt-einsum = ">=2.3.2"
 packaging = "*"
@@ -4358,7 +4358,8 @@ protobuf = ">=3.20.3,<4.21.0 || >4.21.0,<4.21.1 || >4.21.1,<4.21.2 || >4.21.2,<4
 setuptools = "*"
 six = ">=1.12.0"
 tensorboard = ">=2.14,<2.15"
-tensorflow-estimator = ">=2.14.0rc0,<2.15"
+tensorflow-estimator = ">=2.14.0,<2.15"
+tensorflow-io-gcs-filesystem = ">=0.23.1"
 termcolor = ">=1.1.0"
 typing-extensions = ">=3.6.6"
 wrapt = ">=1.11.0,<1.15"
@@ -4383,23 +4384,23 @@ protobuf = ">=3.20.3,<5"
 
 [[package]]
 name = "tensorflow-text"
-version = "2.14.0rc0"
+version = "2.14.0"
 description = "TF.Text is a TensorFlow library of text related ops, modules, and subgraphs."
 optional = false
 python-versions = "*"
 files = [
-    {file = "tensorflow_text-2.14.0rc0-cp310-cp310-macosx_10_9_x86_64.whl", hash = "sha256:454fecf558615b1064526f2083c36aed8247cb71f253e72e317aa8443c46718a"},
-    {file = "tensorflow_text-2.14.0rc0-cp310-cp310-manylinux_2_17_x86_64.manylinux2014_x86_64.whl", hash = "sha256:c7b36797b6b3e85edecb78b1aed2c1397e82f8d69e1ca7f9298c158d021509dd"},
-    {file = "tensorflow_text-2.14.0rc0-cp311-cp311-macosx_10_9_x86_64.whl", hash = "sha256:eda22eb50470703ee8073bfd636318b45cb59ec5ec7c9c0bb88fd14eb9c27f4a"},
-    {file = "tensorflow_text-2.14.0rc0-cp311-cp311-manylinux_2_17_x86_64.manylinux2014_x86_64.whl", hash = "sha256:0df1026b897075c6ffb3afd2f07a0310f17ee8be715e73e4417bbc174c3fe8d4"},
-    {file = "tensorflow_text-2.14.0rc0-cp39-cp39-macosx_10_9_x86_64.whl", hash = "sha256:d52c837408722d61831107f976683c89301bf156e91dc6244a04ddf055ef1a24"},
-    {file = "tensorflow_text-2.14.0rc0-cp39-cp39-manylinux_2_17_x86_64.manylinux2014_x86_64.whl", hash = "sha256:981899cdde6ad19db7d276c0a454fa6961465935462d8a3dbb572b81b06529bb"},
+    {file = "tensorflow_text-2.14.0-cp310-cp310-macosx_10_9_x86_64.whl", hash = "sha256:705f55e651ff95c815a817eb52ee37c4dfd5b8830620eed3667050559ec4fdfa"},
+    {file = "tensorflow_text-2.14.0-cp310-cp310-manylinux_2_17_x86_64.manylinux2014_x86_64.whl", hash = "sha256:2c68c74bacff493c38be2b2e45f0f1530049a900162670c96443b5ca6a839e8a"},
+    {file = "tensorflow_text-2.14.0-cp311-cp311-macosx_10_9_x86_64.whl", hash = "sha256:c0df6676bf336974579799df05c402e6481db83aec18cc26daaebc0629cfa46b"},
+    {file = "tensorflow_text-2.14.0-cp311-cp311-manylinux_2_17_x86_64.manylinux2014_x86_64.whl", hash = "sha256:4faa428eccdfb9b445a6c076b2b4cc8468372b7c8a3daa64b41cbe17fa04a26c"},
+    {file = "tensorflow_text-2.14.0-cp39-cp39-macosx_10_9_x86_64.whl", hash = "sha256:ef7d1c0e1b0743abbeeaaca89f7f1dd638c989c8abdbc5fb8818465cbdc3aeaf"},
+    {file = "tensorflow_text-2.14.0-cp39-cp39-manylinux_2_17_x86_64.manylinux2014_x86_64.whl", hash = "sha256:249e8858ebb7c5e59548595d95c08611ecb16d677d487c584408a0f1faf4ddbf"},
 ]
 
 [package.dependencies]
-tensorflow = {version = ">=2.14.0rc0,<2.15", markers = "platform_machine != \"arm64\" or platform_system != \"Darwin\""}
+tensorflow = {version = ">=2.14.0,<2.15", markers = "platform_machine != \"arm64\" or platform_system != \"Darwin\""}
 tensorflow-hub = ">=0.13.0"
-tensorflow-macos = {version = ">=2.14.0rc0,<2.15", markers = "platform_machine == \"arm64\" and platform_system == \"Darwin\""}
+tensorflow-macos = {version = ">=2.14.0,<2.15", markers = "platform_machine == \"arm64\" and platform_system == \"Darwin\""}
 
 [package.extras]
 tensorflow-cpu = ["tensorflow-cpu (>=2.12.0,<2.13)"]
@@ -4863,4 +4864,4 @@ testing = ["big-O", "jaraco.functools", "jaraco.itertools", "more-itertools", "p
 [metadata]
 lock-version = "2.0"
 python-versions = ">=3.11,<3.12"
-content-hash = "918ea61b3650b7fc1275ad649244f05cf86f6849a547e85fad963546208ac9c6"
+content-hash = "4d55f389dad0f611576c94164ed5a965b3fa23a43041ba2aad4f8d89fc6e6ad1"
