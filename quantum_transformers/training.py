@@ -168,9 +168,12 @@ def train_and_evaluate(model: flax.linen.Module, train_dataloader, val_dataloade
     input_dtype = dummy_batch[0].dtype
     batch_size = len(dummy_batch)
     root_key, input_key = jax.random.split(key=root_key)
-    inputs_batch = jax.random.uniform(key=input_key, shape=(batch_size,) + tuple(input_shape), dtype=input_dtype)  # Dummy input
+    if input_dtype == jnp.float32 or input_dtype == jnp.float64:
+        dummy_batch = jax.random.uniform(key=input_key, shape=(batch_size,) + tuple(input_shape), dtype=input_dtype)
+    elif input_dtype == jnp.int32 or input_dtype == jnp.int64:
+        dummy_batch = jax.random.randint(key=input_key, shape=(batch_size,) + tuple(input_shape), minval=0, maxval=100, dtype=input_dtype)
 
-    variables = model.init(params_key, inputs_batch, train=False)
+    variables = model.init(params_key, dummy_batch, train=False)
 
     if debug:
         print(jax.tree_map(lambda x: x.shape, variables))
