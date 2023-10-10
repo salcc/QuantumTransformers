@@ -168,10 +168,12 @@ def train_and_evaluate(model: flax.linen.Module, train_dataloader, val_dataloade
     input_dtype = dummy_batch[0].dtype
     batch_size = len(dummy_batch)
     root_key, input_key = jax.random.split(key=root_key)
-    if input_dtype == jnp.float32 or input_dtype == jnp.float64:
+    if jnp.issubdtype(input_dtype, jnp.floating):
         dummy_batch = jax.random.uniform(key=input_key, shape=(batch_size,) + tuple(input_shape), dtype=input_dtype)
-    elif input_dtype == jnp.int32 or input_dtype == jnp.int64:
+    elif jnp.issubdtype(input_dtype, jnp.integer):
         dummy_batch = jax.random.randint(key=input_key, shape=(batch_size,) + tuple(input_shape), minval=0, maxval=100, dtype=input_dtype)
+    else:
+        raise ValueError(f"Unsupported dtype {input_dtype}")
 
     variables = model.init(params_key, dummy_batch, train=False)
 
