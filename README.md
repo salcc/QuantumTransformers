@@ -12,13 +12,13 @@ You can read more details about the project in [this blog post](https://salcc.gi
 
 The folder structure of the project is as follows:
 
-- `quantum_transformers`: the library code for the quantum transformers, as well as for loading the data (`datasets.py`) and training the models (`training.py`).
-  - `quantum_transformers/qmlperfcomp`: subproject to compare the performance of different quantum machine learning frameworks. In particular, I evaluated [PennyLane](https://pennylane.ai/) and [TensorCircuit](https://tensorcircuit.readthedocs.io/) (spoiler: TensorCircuit is much faster).
+- `quantum_transformers/`: the library code for the quantum transformers, as well as for loading the data (`datasets.py`) and training the models (`training.py`).
+  - `quantum_transformers/qmlperfcomp/`: subproject to compare the performance of different quantum machine learning frameworks. In particular, I evaluated [PennyLane](https://pennylane.ai/) and [TensorCircuit](https://tensorcircuit.readthedocs.io/) (spoiler: TensorCircuit is much faster).
 - `notebooks`: the notebooks used for evaluating the models and showing their usage and performance. Each notebook is named after the dataset it uses.
-  - `classical`: classical counterparts as baselines.
-  - `quantum`: the quantum transformers. Additionally, `qvit_cerrat_et_al.ipynb` is a notebook trying to reproduce the results of ["Quantum Vision Transformers" by Cerrat et al.](https://arxiv.org/abs/2106.03173), although unsuccessfully.
-  - `quark-gluon-extra`: additional notebooks for the Quark-Gluon dataset for the paper.
-- `hpopt`: hyperparameter optimization scripts. The folder contains a README with instructions on how to run them.
+  - `visualizations.ipynb`: notebook visualizing the image datasets.
+  - `classical/`: classical counterparts as baselines.
+  - `quantum/`: the quantum transformers. Additionally, `qvit_cerrat_et_al.ipynb` is a notebook trying to reproduce the results of ["Quantum Vision Transformers" by Cerrat et al.](https://arxiv.org/abs/2106.03173), although unsuccessfully.
+- `hpopt/`: hyperparameter optimization scripts. The folder contains a README with instructions on how to run them.
 
 
 ## Datasets
