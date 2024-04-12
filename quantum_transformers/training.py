@@ -127,11 +127,11 @@ def evaluate(state: TrainState, eval_dataloader, num_classes: int,
             print(f"y_true = {y_true}")
         if num_classes == 2:
             eval_fpr, eval_tpr, _ = roc_curve(y_true, y_pred)
-            eval_auc = 100.0 * auc(eval_fpr, eval_tpr)
+            eval_auc = auc(eval_fpr, eval_tpr)
         else:
             eval_fpr, eval_tpr = [], []
-            eval_auc = 100.0 * roc_auc_score(y_true, y_pred, multi_class='ovr')
-        progress_bar.set_postfix_str(f"Loss = {eval_loss:.4f}, AUC = {eval_auc:.2f}%")
+            eval_auc = roc_auc_score(y_true, y_pred, multi_class='ovr')
+        progress_bar.set_postfix_str(f"Loss = {eval_loss:.4f}, AUC = {eval_auc:.3f}")
     return eval_loss, eval_auc, eval_fpr, eval_tpr
 
 
@@ -227,7 +227,7 @@ def train_and_evaluate(model: flax.linen.Module, train_dataloader, val_dataloade
 
             train_loss, train_auc, _, _ = evaluate(state, train_dataloader, num_classes, tqdm_desc=None, debug=debug)
             val_loss, val_auc, _, _ = evaluate(state, val_dataloader, num_classes, tqdm_desc=None, debug=debug)
-            progress_bar.set_postfix_str(f"Loss = {val_loss:.4f}, AUC = {val_auc:.2f}%, Train time = {epoch_train_time:.2f}s")
+            progress_bar.set_postfix_str(f"Loss = {val_loss:.4f}, AUC = {val_auc:.3f}, Train time = {epoch_train_time:.2f}s")
 
             metrics['train_losses'].append(train_loss)
             metrics['val_losses'].append(val_loss)
@@ -239,8 +239,12 @@ def train_and_evaluate(model: flax.linen.Module, train_dataloader, val_dataloade
                 best_state = state
             if use_ray:
                 session.report({'val_loss': val_loss, 'val_auc': val_auc, 'best_val_auc': best_val_auc, 'best_epoch': best_epoch})
+    metrics['train_losses'] = jnp.array(metrics['train_losses'])
+    metrics['val_losses'] = jnp.array(metrics['val_losses'])
+    metrics['train_aucs'] = jnp.array(metrics['train_aucs'])
+    metrics['val_aucs'] = jnp.array(metrics['val_aucs'])
 
-    print(f"Best validation AUC = {best_val_auc:.2f}% at epoch {best_epoch}")
+    print(f"Best validation AUC = {best_val_auc:.3f} at epoch {best_epoch}")
     print(f"Total training time = {total_train_time:.2f}s, total time (including evaluations) = {time.time() - start_time:.2f}s")
 
     # Evaluate on test set using the best model
