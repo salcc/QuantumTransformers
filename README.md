@@ -6,7 +6,7 @@ The relevance of the work is accentuated by the upcoming start of operation of t
 
 The work has been undertaken by [Marçal Comajoan Cara](https://salcc.github.io/) as part of [Google Summer of Code](https://summerofcode.withgoogle.com) 2023 with the [ML4SCI organization](https://ml4sci.org/).
 
-You can read more details about the project in [this blog post](https://salcc.github.io/blog/gsoc23), which includes a summary of the results and the potential work that could be done in the future building on it.
+You can read more details about the project in [this blog post](https://salcc.github.io/blog/gsoc23), which includes a summary of the results and the potential work that could be done in the future building on it. The research done has also been published in a [paper](https://doi.org/10.3390/axioms13050323) (see below for the citation).
 
 ## Structure
 
@@ -43,6 +43,26 @@ pip install -e .
 ## Usage
 
 After installation, you can run the notebooks in the `notebooks` folder. You can also import the library in your own code (`import quantum_transformers`).
+
+## Citation
+
+If you find this project helpful for your research, please cite our [paper](https://doi.org/10.3390/axioms13050323):
+
+```
+@Article{axioms13050323,
+AUTHOR = {Comajoan Cara, Marçal and Dahale, Gopal Ramesh and Dong, Zhongtian and Forestano, Roy T. and Gleyzer, Sergei and Justice, Daniel and Kong, Kyoungchul and Magorsch, Tom and Matchev, Konstantin T. and Matcheva, Katia and Unlu, Eyup B.},
+TITLE = {Quantum Vision Transformers for Quark–Gluon Classification},
+JOURNAL = {Axioms},
+VOLUME = {13},
+YEAR = {2024},
+NUMBER = {5},
+ARTICLE-NUMBER = {323},
+URL = {https://www.mdpi.com/2075-1680/13/5/323},
+ISSN = {2075-1680},
+DOI = {10.3390/axioms13050323}
+}
+```
+
 
 ## Acknowledgements
 
