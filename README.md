@@ -4,9 +4,9 @@ This project explores how the [Transformer](https://en.wikipedia.org/wiki/Transf
 
 The relevance of the work is accentuated by the upcoming start of operation of the [High Luminosity Large Hadron Collider (HL-LHC)](https://hilumilhc.web.cern.ch/content/hl-lhc-project) at the end of this decade. The program will produce enormous quantities of data, which in turn will require vast computing resources. A promising approach for dealing with this huge amount of data could be the application of quantum machine learning (QML), which could reduce the time complexity of classical algorithms by running on quantum computers and obtain better accuracies.
 
-The work has been undertaken by [Marçal Comajoan Cara](https://salcc.github.io/) as part of [Google Summer of Code](https://summerofcode.withgoogle.com) 2023 with the [ML4SCI organization](https://ml4sci.org/).
+The work has been undertaken by [Marçal Comajoan Cara](https://marçal.cc/) as part of [Google Summer of Code](https://summerofcode.withgoogle.com) 2023 with the [ML4SCI organization](https://ml4sci.org/).
 
-You can read more details about the project in [this blog post](https://salcc.github.io/blog/gsoc23), which includes a summary of the results and the potential work that could be done in the future building on it. The research done has also been published in a [paper](https://doi.org/10.3390/axioms13050323) (see below for the citation).
+You can read more details about the project in [this blog post](https://marçal.cc/blog/gsoc23/), which includes a summary of the results and the potential work that could be done in the future building on it. The research done has also been published in a [paper](https://doi.org/10.3390/axioms13050323) (see below for the citation).
 
 ## Structure
 
