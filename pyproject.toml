@@ -21,10 +21,10 @@ ipywidgets = "^8.1.0"
 tqdm = "^4.66.3"
 numpy = "^1.25.2"
 gdown = "^4.7.1"
-qiskit = "^0.44.0"
+qiskit = "^1.4.2"
 pylatexenc = "^2.10"
 tensorflow-text = "^2.14.0"
-ray = {extras = ["tune"], version = "^2.8.1"}
+ray = {extras = ["tune"], version = "^2.43.0"}
 
 
 [[tool.poetry.source]]
